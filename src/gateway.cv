@@ -70,7 +70,6 @@ struct tinywl_server {
 };
 
 struct gateway_panel {
-    struct wl_list unmapped_views;
     struct wl_list views;
     struct tinywl_view* focused_view;
     int32_t width, height;
@@ -94,6 +93,7 @@ struct tinywl_view {
 	struct wl_listener destroy;
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
+	bool mapped;
 	int x, y;
     int width, height;
 };
@@ -663,13 +663,14 @@ static void panel_update(struct gateway_panel* panel)
 
         if(view->xwayland_surface != NULL)
         {
-            wlr_xwayland_surface_configure(view->xwayland_surface, 0, 0,
-                view->width, view->height);
+//            wlr_xwayland_surface_configure(view->xwayland_surface, 0, 0,
+//                view->width, view->height);
         } else if(view->xdg_surface != NULL)
         {
             wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
         }
         view->x = x;
+printf("%d\n", x);
         x += view->width;
     }
 }
@@ -702,6 +703,10 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	 * our view list is ordered front-to-back, we iterate over it backwards. */
 	struct tinywl_view *view;
 	wl_list_for_each_reverse(view, &output->panel->views, link) {
+		if (!view->mapped) {
+			/* An unmapped view should not be rendered. */
+			continue;
+		}
 		struct render_data rdata = {
 			.output = output->wlr_output,
 			.view = view,
@@ -788,16 +793,14 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct tinywl_view *view = wl_container_of(listener, view, map);
-	wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->views, &view->link);
+	view->mapped = true;
 	focus_view(view);
 }
 
 static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	struct tinywl_view *view = wl_container_of(listener, view, unmap);
-	wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
+	view->mapped = false;
 }
 
 static void xdg_surface_destroy(struct wl_listener *listener, void *data) {
@@ -807,11 +810,17 @@ static void xdg_surface_destroy(struct wl_listener *listener, void *data) {
 	free(view);
 }
 
+static void xwayland_surface_map(struct wl_listener *listener, void *data) {
+    /* Called when the surface is mapped, or ready to display on-screen. */
+    struct tinywl_view *view = wl_container_of(listener, view, map);
+    view->mapped = true;
+    focus_view(view);
+}
+
 static void xwayland_surface_unmap(struct wl_listener *listener, void *data) {
     /* Called when the surface is unmapped, and should no longer be shown. */
     struct tinywl_view *view = wl_container_of(listener, view, unmap);
-    wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
+    view->mapped = false;
 }
  
 static void xwayland_surface_destroy(struct wl_listener *listener, void *data) {
@@ -819,14 +828,6 @@ static void xwayland_surface_destroy(struct wl_listener *listener, void *data) {
     struct tinywl_view *view = wl_container_of(listener, view, destroy);
     wl_list_remove(&view->link);
     free(view);
-}
-
-static void xwayland_surface_map(struct wl_listener *listener, void *data) {
-    /* Called when the surface is mapped, or ready to display on-screen. */
-    struct tinywl_view *view = wl_container_of(listener, view, map);
-    wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->views, &view->link);
-    focus_view(view);
 }
 
 static void begin_interactive(struct tinywl_view *view,
@@ -903,23 +904,23 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
 	view->server = server;
 	view->xdg_surface = xdg_surface;
 
-    /* Listen to the various events it can emit */
-    view->map.notify = xdg_surface_map;
-    wl_signal_add(&xdg_surface->events.map, &view->map);
-    view->unmap.notify = xdg_surface_unmap;
-    wl_signal_add(&xdg_surface->events.unmap, &view->unmap);
-    view->destroy.notify = xdg_surface_destroy;
-    wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
+	/* Listen to the various events it can emit */
+	view->map.notify = xdg_surface_map;
+	wl_signal_add(&xdg_surface->events.map, &view->map);
+	view->unmap.notify = xdg_surface_unmap;
+	wl_signal_add(&xdg_surface->events.unmap, &view->unmap);
+	view->destroy.notify = xdg_surface_destroy;
+	wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
 
-    /* cotd */
-    struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
-    view->request_move.notify = xdg_toplevel_request_move;
-    wl_signal_add(&toplevel->events.request_move, &view->request_move);
-    view->request_resize.notify = xdg_toplevel_request_resize;
-    wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
+	/* cotd */
+	struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
+	view->request_move.notify = xdg_toplevel_request_move;
+	wl_signal_add(&toplevel->events.request_move, &view->request_move);
+	view->request_resize.notify = xdg_toplevel_request_resize;
+	wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
 
-    /* Add it to the list of views. */
-    wl_list_insert(&server->focused_panel->unmapped_views, &view->link);
+	/* Add it to the list of views. */
+	wl_list_insert(&server->focused_panel->views, &view->link);
 }
 
 static void server_new_xwayland_surface(struct wl_listener *listener, void *data) {
@@ -928,7 +929,7 @@ static void server_new_xwayland_surface(struct wl_listener *listener, void *data
     struct tinywl_server *server =
         wl_container_of(listener, server, new_xwayland_surface);
     struct wlr_xwayland_surface* xwayland_surface = data;
-
+ 
     /* Allocate a tinywl_view for this surface */
     struct tinywl_view *view =
         calloc(1, sizeof(struct tinywl_view));
@@ -943,8 +944,15 @@ static void server_new_xwayland_surface(struct wl_listener *listener, void *data
     view->destroy.notify = xwayland_surface_destroy;
     wl_signal_add(&xwayland_surface->events.destroy, &view->destroy);
  
+    /* cotd */
+//    struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
+//    view->request_move.notify = xdg_toplevel_request_move;
+//    wl_signal_add(&toplevel->events.request_move, &view->request_move);
+//    view->request_resize.notify = xdg_toplevel_request_resize;
+//    wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
+ 
     /* Add it to the list of views. */
-    wl_list_insert(&server->focused_panel->unmapped_views, &view->link);
+    wl_list_insert(&server->focused_panel->views, &view->link);
 }
 
 int main(int argc, char *argv[]) {
@@ -1007,7 +1015,6 @@ int main(int argc, char *argv[]) {
 	wl_signal_add(&server.backend->events.new_output, &server.new_output);
 
     struct gateway_panel* panel = calloc(1, sizeof(struct gateway_panel));
-    wl_list_init(&panel->unmapped_views);
     wl_list_init(&panel->views);
     server.focused_panel = panel;
 
