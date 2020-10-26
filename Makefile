@@ -16,7 +16,7 @@ xdg-shell-protocol.c: xdg-shell-protocol.h
 	$(WAYLAND_SCANNER) private-code \
 		$(WAYLAND_PROTOCOLS)/stable/xdg-shell/xdg-shell.xml $@
 
-tinywl: tinywl.c xdg-shell-protocol.h xdg-shell-protocol.c
+gateway: src/* xdg-shell-protocol.h xdg-shell-protocol.c
 	$(CC) $(CFLAGS) \
 		-g -Werror -I. \
 		-DWLR_USE_UNSTABLE \
@@ -24,7 +24,7 @@ tinywl: tinywl.c xdg-shell-protocol.h xdg-shell-protocol.c
 		$(LIBS)
 
 clean:
-	rm -f tinywl xdg-shell-protocol.h xdg-shell-protocol.c
+	rm -f gateway xdg-shell-protocol.h xdg-shell-protocol.c
 
-.DEFAULT_GOAL=tinywl
+.DEFAULT_GOAL=gateway
 .PHONY: clean
