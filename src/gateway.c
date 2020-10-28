@@ -20,6 +20,7 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/xwayland.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
@@ -39,7 +40,9 @@ struct tinywl_server {
 
 	struct wlr_xdg_shell *xdg_shell;
 	struct wl_listener new_xdg_surface;
-	//struct wl_list views;
+
+    struct wlr_xdg_decoration_manager_v1* decoration_manager;
+    struct wl_listener new_toplevel_decoration;
 
     struct wlr_xwayland* xwayland;
     struct wl_listener new_xwayland_surface;
@@ -670,6 +673,7 @@ static void panel_update(struct gateway_panel* panel)
             wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
         }
         view->x = x;
+        view->y = 100;
         x += view->width;
     }
 }
@@ -947,6 +951,15 @@ static void server_new_xwayland_surface(struct wl_listener *listener, void *data
     wl_list_insert(&server->focused_panel->unmapped_views, &view->link);
 }
 
+static void server_new_xdg_decoration(struct wl_listener* listener, void* data)
+{
+    struct wlr_xdg_toplevel_decoration_v1* decoration = data;
+    wlr_xdg_toplevel_decoration_v1_set_mode(
+        decoration,
+        WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+    );
+}
+
 int main(int argc, char *argv[]) {
 	wlr_log_init(WLR_DEBUG, NULL);
 	char *startup_cmd = NULL;
@@ -1021,6 +1034,11 @@ int main(int argc, char *argv[]) {
 	server.new_xdg_surface.notify = server_new_xdg_surface;
 	wl_signal_add(&server.xdg_shell->events.new_surface,
 			&server.new_xdg_surface);
+
+    server.decoration_manager = wlr_xdg_decoration_manager_v1_create(server.wl_display);
+    server.new_toplevel_decoration.notify = server_new_xdg_decoration;
+    wl_signal_add(&server.decoration_manager->events.new_toplevel_decoration,
+            &server.new_toplevel_decoration);
 
     // XWayland
     server.xwayland = wlr_xwayland_create(server.wl_display, server.compositor, false);
