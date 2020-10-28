@@ -1,4 +1,4 @@
-    Copyright (C) 2020 Sam H Smith
+/*    Copyright (C) 2020 Sam H Smith
     Contact: sam.henning.smith@protonmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+*/
 
 #define _POSIX_C_SOURCE 200112L
 #include <getopt.h>
