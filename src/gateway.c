@@ -75,6 +75,7 @@ struct tinywl_server {
 struct gateway_panel {
     struct wl_list unmapped_views;
     struct wl_list views;
+    struct wl_list redirect_views;
     struct tinywl_view* focused_view;
     int32_t width, height;
 };
@@ -657,24 +658,52 @@ static void render_surface(struct wlr_surface *surface,
 
 static void panel_update(struct gateway_panel* panel)
 {
-    int32_t x = 0;
     struct tinywl_view *view;
-    wl_list_for_each(view, &panel->views, link)
+    struct tinywl_view *_view_tmp;
+    wl_list_for_each_safe(view, _view_tmp, &panel->redirect_views, link)
     {
+        if(view->xwayland_surface->override_redirect)
+        {
+            view->x=view->xwayland_surface->x;
+            view->y=view->xwayland_surface->y;
+            view->width=view->xwayland_surface->width;
+            view->height=view->xwayland_surface->height;
+        }else{
+            wl_list_remove(&view->link);    
+            wl_list_insert(panel->views.prev, &view->link);
+        }
+    }
+
+    int32_t x = 0;
+    wl_list_for_each_safe(view, _view_tmp, &panel->views, link)
+    {
+        if(view->xwayland_surface != NULL)
+        {
+            if(view->xwayland_surface->override_redirect)
+            {
+                view->x=view->xwayland_surface->x;
+                view->y=view->xwayland_surface->y;
+                view->width=view->xwayland_surface->width;
+                view->height=view->xwayland_surface->height;
+                wl_list_remove(&view->link);    
+                wl_list_insert(panel->redirect_views.prev, &view->link);
+                continue;
+            }
+        }
         view->width = 400;
         view->height = 300;
+        view->x = x;
+        view->y = 100;
+        x += view->width;
 
         if(view->xwayland_surface != NULL)
         {
-            wlr_xwayland_surface_configure(view->xwayland_surface, 0, 0,
+            wlr_xwayland_surface_configure(view->xwayland_surface, view->x, view->y,
                 view->width, view->height);
         } else if(view->xdg_surface != NULL)
         {
             wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
         }
-        view->x = x;
-        view->y = 100;
-        x += view->width;
     }
 }
 static void output_frame(struct wl_listener *listener, void *data) {
@@ -724,6 +753,16 @@ static void output_frame(struct wl_listener *listener, void *data) {
                 0, 0, &rdata);
         }
 	}
+    wl_list_for_each_reverse(view, &output->panel->redirect_views, link) {
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .view = view,
+            .renderer = renderer,
+            .when = &now,
+        };
+        render_surface(view->xwayland_surface->surface,
+            0, 0, &rdata);
+    }
 
 	/* Hardware cursors are rendered by the GPU on a separate plane, and can be
 	 * moved around without re-rendering what's beneath them - which is more
@@ -793,8 +832,8 @@ static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct tinywl_view *view = wl_container_of(listener, view, map);
 	wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->views, &view->link);
-	focus_view(view);
+    wl_list_insert(view->server->focused_panel->views.prev, &view->link);
+//	focus_view(view);
 }
 
 static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
@@ -829,8 +868,8 @@ static void xwayland_surface_map(struct wl_listener *listener, void *data) {
     /* Called when the surface is mapped, or ready to display on-screen. */
     struct tinywl_view *view = wl_container_of(listener, view, map);
     wl_list_remove(&view->link);    
-    wl_list_insert(&view->server->focused_panel->views, &view->link);
-    focus_view(view);
+    wl_list_insert(view->server->focused_panel->views.prev, &view->link);
+//    focus_view(view);
 }
 
 static void begin_interactive(struct tinywl_view *view,
@@ -1022,6 +1061,7 @@ int main(int argc, char *argv[]) {
     struct gateway_panel* panel = calloc(1, sizeof(struct gateway_panel));
     wl_list_init(&panel->unmapped_views);
     wl_list_init(&panel->views);
+    wl_list_init(&panel->redirect_views);
     server.focused_panel = panel;
 
 	/* Set up our list of views and the xdg-shell. The xdg-shell is a Wayland
