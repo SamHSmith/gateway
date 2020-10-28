@@ -1,4 +1,5 @@
-/*    Copyright (C) 2020 Sam H Smith
+/*
+    Copyright (C) 2020 Sam H Smith
     Contact: sam.henning.smith@protonmail.com
 
     This program is free software: you can redistribute it and/or modify
