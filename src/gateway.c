@@ -660,19 +660,6 @@ static void panel_update(struct gateway_panel* panel)
 {
     struct tinywl_view *view;
     struct tinywl_view *_view_tmp;
-    wl_list_for_each_safe(view, _view_tmp, &panel->redirect_views, link)
-    {
-        if(view->xwayland_surface->override_redirect)
-        {
-            view->x=view->xwayland_surface->x;
-            view->y=view->xwayland_surface->y;
-            view->width=view->xwayland_surface->width;
-            view->height=view->xwayland_surface->height;
-        }else{
-            wl_list_remove(&view->link);    
-            wl_list_insert(panel->views.prev, &view->link);
-        }
-    }
 
     int32_t x = 0;
     wl_list_for_each_safe(view, _view_tmp, &panel->views, link)
@@ -704,6 +691,16 @@ static void panel_update(struct gateway_panel* panel)
         {
             wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
         }
+    }
+}
+static void panel_post_update(struct gateway_panel* panel)
+{
+    struct tinywl_view *view;
+    struct tinywl_view *_view_tmp;
+    wl_list_for_each_safe(view, _view_tmp, &panel->redirect_views, link)
+    {
+        wl_list_remove(&view->link);
+        wl_list_insert(panel->views.prev, &view->link);
     }
 }
 static void output_frame(struct wl_listener *listener, void *data) {
@@ -776,6 +773,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	 * on-screen. */
 	wlr_renderer_end(renderer);
 	wlr_output_commit(output->wlr_output);
+
+    panel_post_update(output->panel);
 }
 
 static void server_new_output(struct wl_listener *listener, void *data) {
