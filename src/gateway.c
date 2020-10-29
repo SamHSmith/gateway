@@ -372,7 +372,7 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
 
 static bool view_at(struct tinywl_view *view,
 		double lx, double ly, struct wlr_surface **surface,
-		double *sx, double *sy) {
+		double *sx, double *sy, double* scale_x, double* scale_y) {
 	/*
 	 * XDG toplevels may have nested surfaces, such as popup windows for context
 	 * menus or tooltips. This function tests if any of those are underneath the
@@ -397,6 +397,14 @@ static bool view_at(struct tinywl_view *view,
             _sx = view_sx;
             _sy = view_sy;
             _surface = view->xwayland_surface->surface;
+            if(view->width != 0 && view->xwayland_surface->width != 0)
+            {
+                *scale_x= ((double)view->xwayland_surface->width) / ((double)view->width);
+            }
+            if(view->height != 0 && view->xwayland_surface->height != 0)
+            {
+                *scale_y= ((double)view->xwayland_surface->height) / ((double)view->height);
+            }
         }
     }
 
@@ -412,12 +420,12 @@ static bool view_at(struct tinywl_view *view,
 
 static struct tinywl_view *desktop_view_at(
 		struct tinywl_server *server, double lx, double ly,
-		struct wlr_surface **surface, double *sx, double *sy) {
+		struct wlr_surface **surface, double *sx, double *sy, double* scale_x, double* scale_y) {
 	/* This iterates over all of our surfaces and attempts to find one under the
 	 * cursor. This relies on server->views being ordered from top-to-bottom. */
 	struct tinywl_view *view;
 	wl_list_for_each(view, &server->focused_panel->views, link) {
-		if (view_at(view, lx, ly, surface, sx, sy)) {
+		if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
 			return view;
 		}
 	}
@@ -494,10 +502,11 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 
 	/* Otherwise, find the view under the pointer and send the event along. */
 	double sx, sy;
+    double scale_x = 1.0, scale_y = 1.0;
 	struct wlr_seat *seat = server->seat;
 	struct wlr_surface *surface = NULL;
 	struct tinywl_view *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+			server->cursor->x, server->cursor->y, &surface, &sx, &sy, &scale_x, &scale_y);
 	if (!view) {
 		/* If there's no view under the cursor, set the cursor image to a
 		 * default. This is what makes the cursor image appear when you move it
@@ -519,7 +528,7 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 		if (!focus_changed) {
 			/* The enter event contains coordinates, so we only need to notify
 			 * on motion if the focus did not change. */
-			wlr_seat_pointer_notify_motion(seat, time, sx, sy);
+			wlr_seat_pointer_notify_motion(seat, time, sx*scale_x, sy*scale_y);
 		}
 	} else {
 		/* Clear pointer focus so future button events and such are not sent to
@@ -569,9 +578,10 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	wlr_seat_pointer_notify_button(server->seat,
 			event->time_msec, event->button, event->state);
 	double sx, sy;
+    double scale_x = 1.0, scale_y = 1.0;
 	struct wlr_surface *surface;
 	struct tinywl_view *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+			server->cursor->x, server->cursor->y, &surface, &sx, &sy, &scale_x, &scale_y);
 	if (event->state == WLR_BUTTON_RELEASED) {
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		server->cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
@@ -644,8 +654,8 @@ static void render_surface(struct wlr_surface *surface,
 	struct wlr_box box = {
 		.x = ox * output->scale,
 		.y = oy * output->scale,
-		.width = surface->current.width * output->scale,
-		.height = surface->current.height * output->scale,
+		.width = view->width * output->scale,
+		.height = view->height * output->scale,
 	};
 
 	/*
@@ -703,8 +713,12 @@ static void panel_update(struct gateway_panel* panel)
 
         if(view->xwayland_surface != NULL)
         {
+            int32_t w = view->width, h = view->height;
+            if(view->xwayland_surface->size_hints->min_width > w) { w = view->xwayland_surface->size_hints->min_width; }
+            if(view->xwayland_surface->size_hints->min_height > h) { h = view->xwayland_surface->size_hints->min_height; }
+
             wlr_xwayland_surface_configure(view->xwayland_surface, view->x, view->y,
-                view->width, view->height);
+                w, h);
         } else if(view->xdg_surface != NULL)
         {
             wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
