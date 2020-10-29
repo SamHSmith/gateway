@@ -701,7 +701,7 @@ static void panel_update(struct gateway_panel* panel)
                 view->width=view->xwayland_surface->width;
                 view->height=view->xwayland_surface->height;
                 wl_list_remove(&view->link);    
-                wl_list_insert(panel->redirect_views.prev, &view->link);
+                wl_list_insert(&panel->redirect_views, &view->link);
                 continue;
             }
         }
@@ -732,7 +732,7 @@ static void panel_post_update(struct gateway_panel* panel)
     wl_list_for_each_safe(view, _view_tmp, &panel->redirect_views, link)
     {
         wl_list_remove(&view->link);
-        wl_list_insert(panel->views.prev, &view->link);
+        wl_list_insert(&panel->views, &view->link);
     }
 }
 static void output_frame(struct wl_listener *listener, void *data) {
