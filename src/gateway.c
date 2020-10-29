@@ -90,12 +90,19 @@ struct tinywl_server {
 	struct wl_listener new_output;
 };
 
+struct gateway_panel_stack {
+    int32_t width, height, current_y, current_x, max_items, item_count;
+};
+
 struct gateway_panel {
     struct wl_list unmapped_views;
     struct wl_list views;
     struct wl_list redirect_views;
     struct tinywl_view* focused_view;
     int32_t width, height;
+
+    struct gateway_panel_stack* stacks;
+    int32_t stack_count;
 };
 
 struct tinywl_output {
@@ -118,6 +125,7 @@ struct tinywl_view {
 	struct wl_listener request_resize;
 	int x, y;
     int width, height;
+    int32_t stack_index;
 };
 
 struct tinywl_keyboard {
@@ -170,9 +178,6 @@ static void focus_view(struct tinywl_view *view) {
         }
 	}
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-	/* Move the view to the front */
-	wl_list_remove(&view->link);
-	wl_list_insert(&server->focused_panel->views, &view->link);
     server->focused_panel->focused_view = view;
 	/* Activate the new surface */
 	if(view->xdg_surface != NULL)
@@ -185,6 +190,14 @@ static void focus_view(struct tinywl_view *view) {
         wlr_seat_keyboard_notify_enter(seat, surface,
             keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
     }
+}
+
+static void move_to_front(struct tinywl_view *view)
+{
+    struct tinywl_server *server = view->server;
+    /* Move the view to the front */
+    wl_list_remove(&view->link);
+    wl_list_insert(&server->focused_panel->views, &view->link);
 }
 
 static void keyboard_handle_modifiers(
@@ -222,15 +235,18 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 		if (wl_list_length(&server->focused_panel->views) < 2) {
 			break;
 		}
-		struct tinywl_view *current_view = wl_container_of(
-			server->focused_panel->views.next, current_view, link);
+
+		struct tinywl_view *current_view = server->focused_panel->focused_view;
+        struct wl_list* linknext = current_view->link.next;
+        if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
 		struct tinywl_view *next_view = wl_container_of(
-			current_view->link.next, next_view, link);
+			linknext, next_view, link);
+
 		focus_view(next_view);
-		/* Move the previous view to the end of the list */
-		wl_list_remove(&current_view->link);
-		wl_list_insert(server->focused_panel->views.prev, &current_view->link);
 		break;
+    case XKB_KEY_F2:
+        move_to_front(server->focused_panel->focused_view);
+        break;
 	default:
 		return false;
 	}
@@ -391,8 +407,8 @@ static bool view_at(struct tinywl_view *view,
     			view->xdg_surface, view_sx, view_sy, &_sx, &_sy);
     } else if(view->xwayland_surface != NULL)
     {
-        if(view_sx > 0 && view_sx < view->xwayland_surface->width
-            && view_sy > 0 && view_sy < view->xwayland_surface->height)
+        if(view_sx > 0 && view_sx < view->width
+            && view_sy > 0 && view_sy < view->height)
         {
             _sx = view_sx;
             _sy = view_sy;
@@ -688,10 +704,9 @@ static void panel_update(struct gateway_panel* panel)
 {
     struct tinywl_view *view;
     struct tinywl_view *_view_tmp;
-
-    int32_t x = 0;
     wl_list_for_each_safe(view, _view_tmp, &panel->views, link)
     {
+        view->stack_index = -1;
         if(view->xwayland_surface != NULL)
         {
             if(view->xwayland_surface->override_redirect)
@@ -705,17 +720,61 @@ static void panel_update(struct gateway_panel* panel)
                 continue;
             }
         }
-        view->width = 400;
-        view->height = 300;
-        view->x = x;
-        view->y = 100;
-        x += view->width;
+    }
+    int32_t x=0;
+    for(int i = 0; i < panel->stack_count; i++)
+    {
+        panel->stacks[i].item_count = 0;
+        panel->stacks[i].current_y = 0;
+        panel->stacks[i].current_x = x;
+        x += panel->stacks[i].width;
+    }
+
+    wl_list_for_each(view, &panel->views, link)
+    {
+        view->stack_index = panel->stack_count - 1;
+        panel->stacks[panel->stack_count - 1].item_count++;
+    }
+
+bool is_done = !(wl_list_length(&panel->views) > 0);
+while(!is_done) {
+wl_list_for_each(view, &panel->views, link)
+    {
+    int32_t sid = view->stack_index;
+    for(int i = view->stack_index - 1; i >= 0; i--)
+    {
+        if(panel->stacks[i].item_count < panel->stacks[i].max_items &&
+    ((panel->stacks[i].item_count + 2 <= panel->stacks[sid].item_count) || panel->stacks[i].item_count < 1))
+        {
+            sid = i;
+            break;
+        }
+    }
+    if(sid == view->stack_index) { is_done = true; break; }
+
+    panel->stacks[view->stack_index].item_count--;
+    panel->stacks[sid].item_count++;
+    view->stack_index = sid;
+}
+}
+
+    wl_list_for_each(view, &panel->views, link)
+    {
+        view->width = panel->stacks[view->stack_index].width;
+        view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
+        view->x = panel->stacks[view->stack_index].current_x;
+        view->y = panel->stacks[view->stack_index].current_y;
+        panel->stacks[view->stack_index].current_y += view->height;
 
         if(view->xwayland_surface != NULL)
         {
             int32_t w = view->width, h = view->height;
             if(view->xwayland_surface->size_hints->min_width > w) { w = view->xwayland_surface->size_hints->min_width; }
             if(view->xwayland_surface->size_hints->min_height > h) { h = view->xwayland_surface->size_hints->min_height; }
+            if(view->xwayland_surface->size_hints->max_width > 0 &&
+        view->xwayland_surface->size_hints->max_width < w) { w = view->xwayland_surface->size_hints->max_width; }
+            if(view->xwayland_surface->size_hints->max_height > 0 &&
+        view->xwayland_surface->size_hints->max_height < h) { h = view->xwayland_surface->size_hints->max_height; }
 
             wlr_xwayland_surface_configure(view->xwayland_surface, view->x, view->y,
                 w, h);
@@ -1093,6 +1152,15 @@ int main(int argc, char *argv[]) {
     wl_list_init(&panel->unmapped_views);
     wl_list_init(&panel->views);
     wl_list_init(&panel->redirect_views);
+
+    panel->stacks = calloc(2, sizeof(struct gateway_panel));
+    panel->stack_count = 2;
+    panel->stacks[0].width = 1000;
+    panel->stacks[0].height = 1080;
+    panel->stacks[0].max_items = 2;
+    panel->stacks[1].width = 920;
+    panel->stacks[1].height = 1080;
+    panel->stacks[1].max_items = 2;
     server.focused_panel = panel;
 
 	/* Set up our list of views and the xdg-shell. The xdg-shell is a Wayland
