@@ -99,7 +99,6 @@ struct gateway_panel {
     struct wl_list views;
     struct wl_list redirect_views;
     struct tinywl_view* focused_view;
-    int32_t width, height;
 
     struct gateway_panel_stack* stacks;
     int32_t stack_count;
@@ -111,6 +110,8 @@ struct tinywl_output {
 	struct wlr_output *wlr_output;
 	struct wl_listener frame;
     struct gateway_panel* panel;
+    int32_t* stacks;
+    int32_t stack_count;
 };
 
 struct tinywl_view {
@@ -125,6 +126,7 @@ struct tinywl_view {
 	struct wl_listener request_resize;
 	int x, y;
     int width, height;
+    bool is_fullscreen;
     int32_t stack_index;
 };
 
@@ -246,6 +248,9 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 		break;
     case XKB_KEY_F2:
         move_to_front(server->focused_panel->focused_view);
+        break;
+    case XKB_KEY_F3:
+        server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
         break;
 	default:
 		return false;
@@ -661,8 +666,8 @@ static void render_surface(struct wlr_surface *surface,
 	 * have layout coordinates of 2000,100. We need to translate that to
 	 * output-local coordinates, or (2000 - 1920). */
 	double ox = 0, oy = 0;
-//	wlr_output_layout_output_coords(
-//			view->server->output_layout, output, &ox, &oy);
+	wlr_output_layout_output_coords(
+			view->server->output_layout, output, &ox, &oy);
 	ox += view->x + sx, oy += view->y + sy;
 
 	/* We also have to apply the scale factor for HiDPI outputs. This is only
@@ -700,7 +705,17 @@ static void render_surface(struct wlr_surface *surface,
 	wlr_surface_send_frame_done(surface, rdata->when);
 }
 
-static void panel_update(struct gateway_panel* panel)
+static bool output_contains_stack(struct tinywl_output* output, int32_t s)
+{
+    for(int i = 0; i < output->stack_count; i++)
+    {
+        if(output->stacks[i] == s)
+        { return true; }
+    }
+    return false;
+}
+
+static void panel_update(struct gateway_panel* panel, struct tinywl_output* output)
 {
     struct tinywl_view *view;
     struct tinywl_view *_view_tmp;
@@ -721,12 +736,18 @@ static void panel_update(struct gateway_panel* panel)
             }
         }
     }
-    int32_t x=0;
+    struct wlr_output_layout_output* output_layout = wlr_output_layout_get(
+        output->server->output_layout, output->wlr_output
+    );
+    int32_t x= output_layout->x;
     for(int i = 0; i < panel->stack_count; i++)
     {
         panel->stacks[i].item_count = 0;
-        panel->stacks[i].current_y = 0;
+        if(!output_contains_stack(output, i)) { continue; }
+        panel->stacks[i].current_y = output_layout->y;
         panel->stacks[i].current_x = x;
+        panel->stacks[i].height = output->wlr_output->height;
+        panel->stacks[i].width = output->wlr_output->width / output->stack_count;
         x += panel->stacks[i].width;
     }
 
@@ -736,10 +757,10 @@ static void panel_update(struct gateway_panel* panel)
         panel->stacks[panel->stack_count - 1].item_count++;
     }
 
-bool is_done = !(wl_list_length(&panel->views) > 0);
-while(!is_done) {
 wl_list_for_each(view, &panel->views, link)
     {
+bool is_done = !(wl_list_length(&panel->views) > 0);
+while(!is_done) {
     int32_t sid = view->stack_index;
     for(int i = view->stack_index - 1; i >= 0; i--)
     {
@@ -760,11 +781,14 @@ wl_list_for_each(view, &panel->views, link)
 
     wl_list_for_each(view, &panel->views, link)
     {
-        view->width = panel->stacks[view->stack_index].width;
-        view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
-        view->x = panel->stacks[view->stack_index].current_x;
-        view->y = panel->stacks[view->stack_index].current_y;
-        panel->stacks[view->stack_index].current_y += view->height;
+        if(!output_contains_stack(output, view->stack_index)) { continue; }
+        if(!view->is_fullscreen) {
+            view->width = panel->stacks[view->stack_index].width;
+            view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
+            view->x = panel->stacks[view->stack_index].current_x;
+            view->y = panel->stacks[view->stack_index].current_y;
+            panel->stacks[view->stack_index].current_y += view->height;
+        }
 
         if(view->xwayland_surface != NULL)
         {
@@ -801,7 +825,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 		wl_container_of(listener, output, frame);
 	struct wlr_renderer *renderer = output->server->renderer;
 
-    panel_update(output->panel);
+    panel_update(output->panel, output);
 
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
@@ -813,6 +837,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	/* The "effective" resolution can change if you rotate your outputs. */
 	int width, height;
 	wlr_output_effective_resolution(output->wlr_output, &width, &height);
+
 	/* Begin the renderer (calls glViewport and some other GL sanity checks) */
 	wlr_renderer_begin(renderer, width, height);
 
@@ -823,6 +848,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	 * our view list is ordered front-to-back, we iterate over it backwards. */
 	struct tinywl_view *view;
 	wl_list_for_each_reverse(view, &output->panel->views, link) {
+        if(!output_contains_stack(output, view->stack_index)) { continue; }
 		struct render_data rdata = {
 			.output = output->wlr_output,
 			.view = view,
@@ -900,8 +926,13 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wl_list_insert(&server->outputs, &output->link);
 
     output->panel = server->focused_panel;
-    output->panel->width = output->wlr_output->width;
-    output->panel->height = output->wlr_output->height;
+
+    output->stacks = calloc(2, sizeof(int32_t));
+    output->stack_count = 2;
+static int32_t start = 0;
+    output->stacks[0] = start;
+    output->stacks[1] = start + 1;
+    start += 2;
 //    struct gateway_panel* panel = calloc(1, sizeof(struct gateway_panel));
 //    output->panel = panel;
 //    wl_list_init(&panel->views);
@@ -1153,14 +1184,12 @@ int main(int argc, char *argv[]) {
     wl_list_init(&panel->views);
     wl_list_init(&panel->redirect_views);
 
-    panel->stacks = calloc(2, sizeof(struct gateway_panel));
-    panel->stack_count = 2;
-    panel->stacks[0].width = 1000;
-    panel->stacks[0].height = 1080;
-    panel->stacks[0].max_items = 2;
-    panel->stacks[1].width = 920;
-    panel->stacks[1].height = 1080;
-    panel->stacks[1].max_items = 2;
+    panel->stacks = calloc(4, sizeof(struct gateway_panel));
+    panel->stack_count = 4;
+    panel->stacks[0].max_items = 1;
+    panel->stacks[1].max_items = 1;
+    panel->stacks[2].max_items = 2;
+    panel->stacks[3].max_items = 2;
     server.focused_panel = panel;
 
 	/* Set up our list of views and the xdg-shell. The xdg-shell is a Wayland
