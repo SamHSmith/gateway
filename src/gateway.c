@@ -127,6 +127,7 @@ struct tinywl_view {
 	int x, y;
     int width, height;
     bool is_fullscreen;
+    struct gateway_panel* focused_by;
     int32_t stack_index;
 };
 
@@ -139,7 +140,7 @@ struct tinywl_keyboard {
 	struct wl_listener key;
 };
 
-static void focus_view(struct tinywl_view *view) {
+static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
 	/* Note: this function only deals with keyboard focus. */
 	if (view == NULL) {
 		return;
@@ -180,7 +181,8 @@ static void focus_view(struct tinywl_view *view) {
         }
 	}
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-    server->focused_panel->focused_view = view;
+    panel->focused_view = view;
+    view->focused_by = panel;
 	/* Activate the new surface */
 	if(view->xdg_surface != NULL)
     {
@@ -244,10 +246,10 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 		struct tinywl_view *next_view = wl_container_of(
 			linknext, next_view, link);
 
-		focus_view(next_view);
+		focus_view(next_view, server->focused_panel);
 		break;
     case XKB_KEY_F2:
-        move_to_front(server->focused_panel->focused_view);
+        if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
         break;
     case XKB_KEY_F3:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
@@ -608,7 +610,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 		server->cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
 	} else {
 		/* Focus that client if the button was _pressed_ */
-		focus_view(view);
+		focus_view(view, server->focused_panel);
 	}
 }
 
@@ -954,13 +956,31 @@ static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	struct tinywl_view *view = wl_container_of(listener, view, map);
 	wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
-//	focus_view(view);
+	if(wl_list_length(&view->server->focused_panel->views) <= 1) {
+        focus_view(view, view->server->focused_panel);
+    }
 }
 
 static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	struct tinywl_view *view = wl_container_of(listener, view, unmap);
-	wl_list_remove(&view->link);    
+    if(view->focused_by != NULL) {
+        if(view->link.next != &view->focused_by->views) {
+            struct tinywl_view *new_view = wl_container_of(view->link.next, new_view, link);
+            focus_view(new_view, view->focused_by);
+            view->focused_by = NULL;
+        } else {
+            if(wl_list_length(&view->focused_by->views) > 1) {
+                struct tinywl_view *new_view = wl_container_of(view->link.prev, new_view, link);
+                focus_view(new_view, view->focused_by);
+                view->focused_by = NULL;
+            } else {
+                view->focused_by->focused_view = NULL;
+                view->focused_by = NULL;
+            }
+        }
+    }
+	wl_list_remove(&view->link);
     wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
 }
 
@@ -974,6 +994,22 @@ static void xdg_surface_destroy(struct wl_listener *listener, void *data) {
 static void xwayland_surface_unmap(struct wl_listener *listener, void *data) {
     /* Called when the surface is unmapped, and should no longer be shown. */
     struct tinywl_view *view = wl_container_of(listener, view, unmap);
+    if(view->focused_by != NULL) {
+        if(view->link.next != &view->focused_by->views) {
+            struct tinywl_view *new_view = wl_container_of(view->link.next, new_view, link);
+            focus_view(new_view, view->focused_by);
+            view->focused_by = NULL;
+        } else {
+            if(wl_list_length(&view->focused_by->views) > 1) {
+                struct tinywl_view *new_view = wl_container_of(view->link.prev, new_view, link);
+                focus_view(new_view, view->focused_by);
+                view->focused_by = NULL;
+            } else {
+                view->focused_by->focused_view = NULL;
+                view->focused_by = NULL;
+            }
+        }
+    }
     wl_list_remove(&view->link);    
     wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
 }
@@ -990,7 +1026,9 @@ static void xwayland_surface_map(struct wl_listener *listener, void *data) {
     struct tinywl_view *view = wl_container_of(listener, view, map);
     wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
-//    focus_view(view);
+    if(wl_list_length(&view->server->focused_panel->views) <= 1) {
+        focus_view(view, view->server->focused_panel);
+    }
 }
 
 static void begin_interactive(struct tinywl_view *view,
