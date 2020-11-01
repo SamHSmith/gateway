@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
+#include <wlr/backend/session.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_compositor.h>
@@ -289,6 +290,16 @@ static void keyboard_handle_key(
 			handled = handle_keybinding(server, syms[i]);
 		}
 	}
+    struct wlr_session* session = wlr_backend_get_session(server->backend); //Virtual terminals
+    if(session != NULL && (modifiers & WLR_MODIFIER_CTRL) && (modifiers & WLR_MODIFIER_ALT)){
+        for(int i = 0; i < nsyms; i++) {
+            for(int x = 1; x <= 12; x++){
+                if(syms[i] == 269024768 + x) {
+                    wlr_session_change_vt(session, x);
+                }
+            }
+        }
+    }
 
 	if (!handled) {
 		/* Otherwise, we pass it along to the client. */
