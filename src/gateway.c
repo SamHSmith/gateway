@@ -93,6 +93,7 @@ struct tinywl_server {
 
 struct gateway_panel_stack {
     int32_t width, height, current_y, current_x, max_items, item_count;
+    bool mapped;
 };
 
 struct gateway_panel {
@@ -756,8 +757,11 @@ static void panel_update(struct gateway_panel* panel, struct tinywl_output* outp
         output->server->output_layout, output->wlr_output
     );
     int32_t x= output_layout->x;
+    int32_t last_stack = 0;
     for(int i = 0; i < panel->stack_count; i++)
     {
+        if(!panel->stacks[i].mapped) { continue; }
+        last_stack = i;
         panel->stacks[i].item_count = 0;
         if(!output_contains_stack(output, i)) { continue; }
         panel->stacks[i].current_y = output_layout->y;
@@ -769,8 +773,8 @@ static void panel_update(struct gateway_panel* panel, struct tinywl_output* outp
 
     wl_list_for_each(view, &panel->views, link)
     {
-        view->stack_index = panel->stack_count - 1;
-        panel->stacks[panel->stack_count - 1].item_count++;
+        view->stack_index = last_stack;
+        panel->stacks[last_stack].item_count++;
     }
 
 wl_list_for_each(view, &panel->views, link)
@@ -780,6 +784,7 @@ while(!is_done) {
     int32_t sid = view->stack_index;
     for(int i = view->stack_index - 1; i >= 0; i--)
     {
+        if(!panel->stacks[i].mapped) { continue; }
         if(panel->stacks[i].item_count < panel->stacks[i].max_items &&
     ((panel->stacks[i].item_count + 2 <= panel->stacks[sid].item_count) || panel->stacks[i].item_count < 1))
         {
@@ -990,7 +995,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wl_signal_add(&wlr_output->events.frame, &output->frame);
 	wl_list_insert(&server->outputs, &output->link);
 
-    output->panel = server->focused_panel;
+    output->panel = server->focused_panel; //TODO add proper panel and output management.
 
     output->stacks = calloc(2, sizeof(int32_t));
     output->stack_count = 2;
@@ -998,6 +1003,11 @@ static int32_t start = 0;
     output->stacks[0] = start;
     output->stacks[1] = start + 1;
     start += 2;
+
+    //Map the stacks
+    for(int i = 0; i < output->stack_count; i++){
+        output->panel->stacks[output->stacks[i]].mapped = true;
+    }
 //    struct gateway_panel* panel = calloc(1, sizeof(struct gateway_panel));
 //    output->panel = panel;
 //    wl_list_init(&panel->views);
