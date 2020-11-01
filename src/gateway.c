@@ -181,6 +181,9 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
         }
 	}
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+    if(panel->focused_view != NULL) {
+        panel->focused_view->focused_by = NULL;
+    }
     panel->focused_view = view;
     view->focused_by = panel;
 	/* Activate the new surface */
@@ -784,12 +787,19 @@ while(!is_done) {
     wl_list_for_each(view, &panel->views, link)
     {
         if(!output_contains_stack(output, view->stack_index)) { continue; }
-        if(!view->is_fullscreen) {
-            view->width = panel->stacks[view->stack_index].width;
-            view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
-            view->x = panel->stacks[view->stack_index].current_x;
-            view->y = panel->stacks[view->stack_index].current_y;
-            panel->stacks[view->stack_index].current_y += view->height;
+
+        view->width = panel->stacks[view->stack_index].width;
+        view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
+        view->x = panel->stacks[view->stack_index].current_x;
+        view->y = panel->stacks[view->stack_index].current_y;
+        panel->stacks[view->stack_index].current_y += view->height;
+
+        if(view->is_fullscreen)
+        {
+            view->x = output_layout->x;
+            view->y = output_layout->y;
+            view->width = output->wlr_output->width;
+            view->height = output->wlr_output->height;
         }
 
         if(view->xwayland_surface != NULL)
@@ -850,7 +860,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	 * our view list is ordered front-to-back, we iterate over it backwards. */
 	struct tinywl_view *view;
 	wl_list_for_each_reverse(view, &output->panel->views, link) {
-        if(!output_contains_stack(output, view->stack_index)) { continue; }
+        if(!output_contains_stack(output, view->stack_index) || view->is_fullscreen
+            || view->focused_by == output->panel) { continue; }
 		struct render_data rdata = {
 			.output = output->wlr_output,
 			.view = view,
@@ -869,6 +880,47 @@ static void output_frame(struct wl_listener *listener, void *data) {
                 0, 0, &rdata);
         }
 	}
+    wl_list_for_each_reverse(view, &output->panel->views, link) {
+        if(!output_contains_stack(output, view->stack_index) || !view->is_fullscreen
+            || view->focused_by == output->panel) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .view = view,
+            .renderer = renderer,
+            .when = &now,
+        };
+        if(view->xdg_surface != NULL)
+        {
+            /* This calls our render_surface function for each surface among the
+             * xdg_surface's toplevel and popups. */
+            wlr_xdg_surface_for_each_surface(view->xdg_surface,
+                    render_surface, &rdata);
+        } else if(view->xwayland_surface != NULL)
+        {
+            render_surface(view->xwayland_surface->surface,
+                0, 0, &rdata);
+        }
+    }
+    wl_list_for_each_reverse(view, &output->panel->views, link) {
+        if(view->focused_by != output->panel) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .view = view,
+            .renderer = renderer,
+            .when = &now,
+        };
+        if(view->xdg_surface != NULL)
+        {
+            /* This calls our render_surface function for each surface among the
+             * xdg_surface's toplevel and popups. */
+            wlr_xdg_surface_for_each_surface(view->xdg_surface,
+                    render_surface, &rdata);
+        } else if(view->xwayland_surface != NULL)
+        {
+            render_surface(view->xwayland_surface->surface,
+                0, 0, &rdata);
+        }
+    }
     wl_list_for_each_reverse(view, &output->panel->redirect_views, link) {
         struct render_data rdata = {
             .output = output->wlr_output,
