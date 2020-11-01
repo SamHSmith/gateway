@@ -226,7 +226,21 @@ static void keyboard_handle_modifiers(
 	wlr_seat_keyboard_notify_modifiers(keyboard->server->seat,
 		&keyboard->device->keyboard->modifiers);
 }
+static void list_swap(struct wl_list* a, struct wl_list* b) // swaps order in views a-b -> b-a
+{
+    struct wl_list* linknext = b->next;
+    
+    struct wl_list* linkprev = a->prev;
 
+    linkprev->next = b;
+    b->prev = linkprev;
+
+    b->next = a;
+    a->prev = b;
+
+    a->next = linknext;
+    linknext->prev = a;
+}
 static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
@@ -239,7 +253,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	case XKB_KEY_Escape:
 		wl_display_terminate(server->wl_display);
 		break;
-	case XKB_KEY_F1:
+	case XKB_KEY_t:
 		/* Cycle to the next view */
 		if (wl_list_length(&server->focused_panel->views) < 2) {
 			break;
@@ -253,10 +267,32 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 
 		focus_view(next_view, server->focused_panel);
 		break;
-    case XKB_KEY_F2:
+    case XKB_KEY_h:
+        /* Cycle to the last view */
+        if (wl_list_length(&server->focused_panel->views) < 2) {
+            break;
+        }
+ 
+        current_view = server->focused_panel->focused_view;
+        linknext = current_view->link.prev;
+        if(linknext == &server->focused_panel->views) { linknext = linknext->prev; }
+        next_view = wl_container_of(
+            linknext, next_view, link);
+ 
+        focus_view(next_view, server->focused_panel);
+        break;
+    case XKB_KEY_T:
+        current_view = server->focused_panel->focused_view;
+        list_swap(&current_view->link, current_view->link.next);
+        break;
+    case XKB_KEY_H:
+        current_view = server->focused_panel->focused_view;
+        list_swap(current_view->link.prev, &current_view->link);
+        break;
+    case XKB_KEY_M | XKB_KEY_m:
         if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
         break;
-    case XKB_KEY_F3:
+    case XKB_KEY_F | XKB_KEY_f:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
         break;
 	default:
