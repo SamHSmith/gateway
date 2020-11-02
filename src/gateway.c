@@ -302,12 +302,12 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
     case XKB_KEY_F | XKB_KEY_f:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
         break;
-    case XKB_KEY_F4:
+    case XKB_KEY_Return:
         strcpy(cmd, server->config->terminal);
         strcat(cmd, " &");
         system(cmd);
         break;
-    case XKB_KEY_F5:
+    case XKB_KEY_V:
         current_view = server->focused_panel->focused_view;
         linknext = current_view->link.next;
         if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
