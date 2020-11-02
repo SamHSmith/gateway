@@ -51,7 +51,12 @@ enum tinywl_cursor_mode {
 	TINYWL_CURSOR_RESIZE,
 };
 
+struct gateway_config {
+    char* terminal;
+};
+
 struct tinywl_server {
+    struct gateway_config* config;
 	struct wl_display *wl_display;
 	struct wlr_backend *backend;
 	struct wlr_renderer *renderer;
@@ -249,6 +254,8 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	 *
 	 * This function assumes Alt is held down.
 	 */
+    char cmd[128];
+
 	switch (sym) {
 	case XKB_KEY_Escape:
 		wl_display_terminate(server->wl_display);
@@ -294,6 +301,23 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         break;
     case XKB_KEY_F | XKB_KEY_f:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
+        break;
+    case XKB_KEY_F4:
+        strcpy(cmd, server->config->terminal);
+        strcat(cmd, " &");
+        system(cmd);
+        break;
+    case XKB_KEY_F5:
+        current_view = server->focused_panel->focused_view;
+        linknext = current_view->link.next;
+        if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
+        next_view = wl_container_of(
+            linknext, next_view, link);
+        if(current_view->xdg_surface != NULL){ wlr_xdg_toplevel_send_close(current_view->xdg_surface); }
+        if(current_view->xwayland_surface != NULL){ wlr_xwayland_surface_close(current_view->xwayland_surface); }
+
+        if(next_view == current_view) { server->focused_panel->focused_view = NULL; }
+        else { server->focused_panel->focused_view = next_view; }
         break;
 	default:
 		return false;
@@ -1287,7 +1311,10 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	struct tinywl_server server;
+    struct tinywl_server server; // GATEWAY CONFIGURATION
+    server.config = calloc(1, sizeof(struct gateway_config));
+    server.config->terminal = "foot";
+
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
 	server.wl_display = wl_display_create();
