@@ -51,7 +51,12 @@ enum tinywl_cursor_mode {
 	TINYWL_CURSOR_RESIZE,
 };
 
+struct gateway_config {
+    char* terminal;
+};
+
 struct tinywl_server {
+    struct gateway_config* config;
 	struct wl_display *wl_display;
 	struct wlr_backend *backend;
 	struct wlr_renderer *renderer;
@@ -235,6 +240,8 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	 *
 	 * This function assumes Alt is held down.
 	 */
+    char cmd[128];
+
 	switch (sym) {
 	case XKB_KEY_Escape:
 		wl_display_terminate(server->wl_display);
@@ -258,6 +265,11 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         break;
     case XKB_KEY_F3:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
+        break;
+    case XKB_KEY_F4:
+        strcpy(cmd, server->config->terminal);
+        strcat(cmd, " &");
+        system(cmd);
         break;
 	default:
 		return false;
@@ -1251,7 +1263,10 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	struct tinywl_server server;
+    struct tinywl_server server; // GATEWAY CONFIGURATION
+    server.config = calloc(1, sizeof(struct gateway_config));
+    server.config->terminal = "foot";
+
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
 	server.wl_display = wl_display_create();
