@@ -1300,6 +1300,10 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+                    // ENVIRONMENT SETUP
+    setenv("QT_QPA_PLATFORMTHEME","qt5ct", 1);
+    setenv("QT_QPA_PLATFORM", "wayland", 1);
+
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
