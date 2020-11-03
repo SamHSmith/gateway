@@ -713,12 +713,18 @@ static void render_surface(struct wlr_surface *surface,
 
 	/* We also have to apply the scale factor for HiDPI outputs. This is only
 	 * part of the puzzle, TinyWL does not fully support HiDPI. */
-	struct wlr_box box = {
-		.x = ox * output->scale,
-		.y = oy * output->scale,
-		.width = view->width * output->scale,
-		.height = view->height * output->scale,
+    struct wlr_box box = {
+        .x = ox * output->scale,
+        .y = oy * output->scale,
+        .width = surface->current.width * output->scale,
+        .height = surface->current.height * output->scale,
 	};
+
+    if(view->xdg_surface != NULL && view->xdg_surface->surface == surface)
+    {
+        box.width = view->width * output->scale;
+        box.height = view->height * output->scale;
+    }
 
 	/*
 	 * Those familiar with OpenGL are also familiar with the role of matricies
