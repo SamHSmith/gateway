@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <limits.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
@@ -1057,6 +1058,7 @@ static int32_t start = 0;
 static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct tinywl_view *view = wl_container_of(listener, view, map);
+    wlr_xdg_toplevel_set_tiled(view->xdg_surface, UINT_MAX);
 	wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
 	if(wl_list_length(&view->server->focused_panel->views) <= 1) {
