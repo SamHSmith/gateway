@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <limits.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
@@ -485,8 +486,18 @@ static bool view_at(struct tinywl_view *view,
 	struct wlr_surface *_surface = NULL;
     if(view->xdg_surface != NULL)
     {
-    	_surface = wlr_xdg_surface_surface_at( //crash
-    			view->xdg_surface, view_sx, view_sy, &_sx, &_sy);
+        double _scale_x = 1.0, _scale_y=1.0;
+        if(view->width != 0 && view->xdg_surface->toplevel->server_pending.width != 0)
+        {
+            _scale_x= ((double)view->xdg_surface->toplevel->server_pending.width) / ((double)view->width);
+        }
+        if(view->height != 0 && view->xdg_surface->toplevel->server_pending.height != 0)
+        {
+            _scale_y= ((double)view->xdg_surface->toplevel->server_pending.height) / ((double)view->height);
+        }
+
+        _surface = wlr_xdg_surface_surface_at(
+                view->xdg_surface, view_sx * _scale_x, view_sy * _scale_y, &_sx, &_sy);
     } else if(view->xwayland_surface != NULL)
     {
         if(view_sx > 0 && view_sx < view->width
@@ -622,7 +633,7 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 		 * from keyboard focus. You get pointer focus by moving the pointer over
 		 * a window.
 		 */
-		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+		wlr_seat_pointer_notify_enter(seat, surface, sx*scale_x, sy*scale_y);
 		if (!focus_changed) {
 			/* The enter event contains coordinates, so we only need to notify
 			 * on motion if the focus did not change. */
@@ -898,7 +909,15 @@ while(!is_done) {
                 w, h);
         } else if(view->xdg_surface != NULL)
         {
-            wlr_xdg_toplevel_set_size(view->xdg_surface, view->width, view->height);
+            int32_t w = view->width, h = view->height;
+            if(view->xdg_surface->toplevel->current.min_width > w) { w = view->xdg_surface->toplevel->current.min_width; }
+            if(view->xdg_surface->toplevel->current.min_height > h) { h = view->xdg_surface->toplevel->current.min_height; }
+            if(view->xdg_surface->toplevel->current.max_width > 0 &&
+        view->xdg_surface->toplevel->current.max_width < w) { w = view->xdg_surface->toplevel->current.max_width; }
+            if(view->xdg_surface->toplevel->current.max_height > 0 &&
+        view->xdg_surface->toplevel->current.max_height < h) { h = view->xdg_surface->toplevel->current.max_height; }
+printf("w: %d, h: %d\n", w, h);
+            wlr_xdg_toplevel_set_size(view->xdg_surface, w, h);
         }
     }
 }
@@ -1093,6 +1112,7 @@ static int32_t start = 0;
 static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct tinywl_view *view = wl_container_of(listener, view, map);
+    wlr_xdg_toplevel_set_tiled(view->xdg_surface, UINT_MAX);
 	wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
 	if(wl_list_length(&view->server->focused_panel->views) <= 1) {
