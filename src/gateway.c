@@ -880,7 +880,6 @@ while(!is_done) {
         view->xdg_surface->toplevel->current.max_width < w) { w = view->xdg_surface->toplevel->current.max_width; }
             if(view->xdg_surface->toplevel->current.max_height > 0 &&
         view->xdg_surface->toplevel->current.max_height < h) { h = view->xdg_surface->toplevel->current.max_height; }
-printf("w: %d, h: %d\n", w, h);
             wlr_xdg_toplevel_set_size(view->xdg_surface, w, h);
         }
     }
