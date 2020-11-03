@@ -916,7 +916,6 @@ while(!is_done) {
         view->xdg_surface->toplevel->current.max_width < w) { w = view->xdg_surface->toplevel->current.max_width; }
             if(view->xdg_surface->toplevel->current.max_height > 0 &&
         view->xdg_surface->toplevel->current.max_height < h) { h = view->xdg_surface->toplevel->current.max_height; }
-printf("w: %d, h: %d\n", w, h);
             wlr_xdg_toplevel_set_size(view->xdg_surface, w, h);
         }
     }
@@ -1336,6 +1335,10 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s [-s startup command]\n", argv[0]);
 		return 0;
 	}
+
+                    // ENVIRONMENT SETUP
+    setenv("QT_QPA_PLATFORMTHEME","qt5ct", 1);
+    setenv("QT_QPA_PLATFORM", "wayland", 1);
 
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
