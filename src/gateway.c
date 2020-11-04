@@ -41,6 +41,7 @@
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/xwayland.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
@@ -91,6 +92,7 @@ struct tinywl_server {
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
 
+    struct wlr_xdg_output_manager_v1* xdg_output_manager;
 	struct wlr_output_layout *output_layout;
 	struct wl_list outputs;
     struct gateway_panel* focused_panel;
@@ -464,8 +466,8 @@ static bool view_at(struct tinywl_view *view,
                 view->xdg_surface, view_sx * _scale_x, view_sy * _scale_y, &_sx, &_sy);
     } else if(view->xwayland_surface != NULL)
     {
-        if(view_sx > 0 && view_sx < view->width
-            && view_sy > 0 && view_sy < view->height)
+        if(view_sx >= 0 && view_sx < view->width
+            && view_sy >= 0 && view_sy < view->height)
         {
             _sx = view_sx;
             _sy = view_sy;
@@ -844,7 +846,6 @@ while(!is_done) {
     wl_list_for_each(view, &panel->views, link)
     {
         if(!output_contains_stack(output, view->stack_index)) { continue; }
-
         view->width = panel->stacks[view->stack_index].width;
         view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
         view->x = panel->stacks[view->stack_index].current_x;
@@ -1339,6 +1340,7 @@ int main(int argc, char *argv[]) {
 	/* Creates an output layout, which a wlroots utility for working with an
 	 * arrangement of screens in a physical layout. */
 	server.output_layout = wlr_output_layout_create();
+    server.xdg_output_manager = wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
 
 	/* Configure a listener to be notified when new outputs are available on the
 	 * backend. */
