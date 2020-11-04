@@ -731,7 +731,7 @@ static void render_surface(struct wlr_surface *surface,
         .height = surface->current.height * output->scale,
 	};
 
-    if(view->xdg_surface != NULL && view->xdg_surface->surface == surface)
+    if((view->xdg_surface != NULL && view->xdg_surface->surface == surface) || view->xwayland_surface != NULL)
     {
         box.width = view->width * output->scale;
         box.height = view->height * output->scale;
