@@ -263,41 +263,47 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	case XKB_KEY_Escape:
 		wl_display_terminate(server->wl_display);
 		break;
+    case XKB_KEY_h:
+        if (wl_list_length(&server->focused_panel->views) < 2) {
+            break;
+        }
+        struct tinywl_view* current_view = server->focused_panel->focused_view;
+        struct wl_list* linknext = current_view->link.prev;
+        if(linknext == &server->focused_panel->views) { linknext = linknext->prev; }
+        struct tinywl_view* next_view = wl_container_of(
+            linknext, next_view, link);
+
+        focus_view(next_view, server->focused_panel);
+        break;
 	case XKB_KEY_t:
-		/* Cycle to the next view */
 		if (wl_list_length(&server->focused_panel->views) < 2) {
 			break;
 		}
-
-		struct tinywl_view *current_view = server->focused_panel->focused_view;
-        struct wl_list* linknext = current_view->link.next;
+        current_view = server->focused_panel->focused_view;
+        linknext = current_view->link.next;
         if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
-		struct tinywl_view *next_view = wl_container_of(
+		next_view = wl_container_of(
 			linknext, next_view, link);
 
 		focus_view(next_view, server->focused_panel);
 		break;
-    case XKB_KEY_h:
-        /* Cycle to the last view */
+    case XKB_KEY_n:
         if (wl_list_length(&server->focused_panel->views) < 2) {
             break;
         }
- 
-        current_view = server->focused_panel->focused_view;
-        linknext = current_view->link.prev;
-        if(linknext == &server->focused_panel->views) { linknext = linknext->prev; }
+
         next_view = wl_container_of(
-            linknext, next_view, link);
+            server->focused_panel->views.prev, next_view, link);
  
         focus_view(next_view, server->focused_panel);
-        break;
-    case XKB_KEY_T:
-        current_view = server->focused_panel->focused_view;
-        list_swap(&current_view->link, current_view->link.next);
         break;
     case XKB_KEY_H:
         current_view = server->focused_panel->focused_view;
         list_swap(current_view->link.prev, &current_view->link);
+        break;
+    case XKB_KEY_T:
+        current_view = server->focused_panel->focused_view;
+        list_swap(&current_view->link, current_view->link.next);
         break;
     case XKB_KEY_M | XKB_KEY_m:
         if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
