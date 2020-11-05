@@ -275,13 +275,15 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         system(cmd);
         break;
     case XKB_KEY_F5:
+        if(server->focused_panel->focused_view == NULL) { break; }
+
         current_view = server->focused_panel->focused_view;
         linknext = current_view->link.next;
         if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
         next_view = wl_container_of(
             linknext, next_view, link);
         if(current_view->xdg_surface != NULL){ wlr_xdg_toplevel_send_close(current_view->xdg_surface); }
-        if(current_view->xwayland_surface != NULL){ wlr_xwayland_surface_close(current_view->xwayland_surface); }
+        if(current_view->xwayland_surface != NULL){ wlr_xwayland_surface_close(current_view->xwayland_surface);}
 
         if(next_view == current_view) { server->focused_panel->focused_view = NULL; }
         else { server->focused_panel->focused_view = next_view; }
