@@ -535,11 +535,24 @@ static struct tinywl_view *desktop_view_at(
 	/* This iterates over all of our surfaces and attempts to find one under the
 	 * cursor. This relies on server->views being ordered from top-to-bottom. */
 	struct tinywl_view *view;
-	wl_list_for_each(view, &server->focused_panel->views, link) {
-		if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
-			return view;
-		}
-	}
+    wl_list_for_each(view, &server->focused_panel->views, link) {
+        if(view->focused_by == NULL) { continue; }
+        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+            return view;
+        }
+    }
+    wl_list_for_each(view, &server->focused_panel->views, link) {
+        if(!view->is_fullscreen || view->focused_by != NULL) { continue; }
+        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+            return view;
+        }
+    }
+    wl_list_for_each(view, &server->focused_panel->views, link) {
+        if(view->is_fullscreen || view->focused_by != NULL) { continue; }
+        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+            return view;
+        }
+    }
 	return NULL;
 }
 
