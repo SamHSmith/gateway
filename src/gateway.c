@@ -55,6 +55,7 @@ enum tinywl_cursor_mode {
 
 struct gateway_config {
     char* terminal;
+    double mouse_sens;
 };
 
 struct tinywl_server {
@@ -628,19 +629,19 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 }
 
 static void server_cursor_motion(struct wl_listener *listener, void *data) {
-	/* This event is forwarded by the cursor when a pointer emits a _relative_
-	 * pointer motion event (i.e. a delta) */
-	struct tinywl_server *server =
-		wl_container_of(listener, server, cursor_motion);
-	struct wlr_event_pointer_motion *event = data;
-	/* The cursor doesn't move unless we tell it to. The cursor automatically
-	 * handles constraining the motion to the output layout, as well as any
-	 * special configuration applied for the specific input device which
-	 * generated the event. You can pass NULL for the device if you want to move
-	 * the cursor around without any input. */
-	wlr_cursor_move(server->cursor, event->device,
-			event->delta_x, event->delta_y);
-	process_cursor_motion(server, event->time_msec);
+    /* This event is forwarded by the cursor when a pointer emits a _relative_
+     * pointer motion event (i.e. a delta) */
+    struct tinywl_server *server =
+        wl_container_of(listener, server, cursor_motion);
+    struct wlr_event_pointer_motion *event = data;
+    /* The cursor doesn't move unless we tell it to. The cursor automatically
+     * handles constraining the motion to the output layout, as well as any
+     * special configuration applied for the specific input device which
+     * generated the event. You can pass NULL for the device if you want to move
+     * the cursor around without any input. */
+    wlr_cursor_move(server->cursor, event->device,
+            event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens);
+    process_cursor_motion(server, event->time_msec);
 }
 
 static void server_cursor_motion_absolute(
@@ -1323,6 +1324,7 @@ int main(int argc, char *argv[]) {
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
+    server.config->mouse_sens = 0.5;
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
