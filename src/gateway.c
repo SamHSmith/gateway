@@ -984,7 +984,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
         }
     }
     wl_list_for_each_reverse(view, &output->panel->views, link) {
-        if(view->focused_by != output->panel) { continue; }
+        if(!output_contains_stack(output, view->stack_index) ||
+            view->focused_by != output->panel) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .view = view,
