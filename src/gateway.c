@@ -135,6 +135,7 @@ struct tinywl_view {
 	struct wl_listener destroy;
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
+    struct wl_listener request_fullscreen;
 	int x, y;
     int width, height;
     bool is_fullscreen;
@@ -1089,6 +1090,13 @@ static int32_t start = 0;
 	wlr_output_layout_add_auto(server->output_layout, wlr_output);
 }
 
+static void xdg_surface_request_fullscreen(struct wl_listener* listener, void* data)
+{
+    struct tinywl_view *view = wl_container_of(listener, view, destroy);
+    struct wlr_xdg_toplevel_set_fullscreen_event* event = data;
+    wlr_xdg_toplevel_set_fullscreen(event->surface, event->fullscreen);
+}
+
 static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct tinywl_view *view = wl_container_of(listener, view, map);
@@ -1097,6 +1105,12 @@ static void xdg_surface_map(struct wl_listener *listener, void *data) {
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
 	if(wl_list_length(&view->server->focused_panel->views) <= 1) {
         focus_view(view, view->server->focused_panel);
+    }
+
+    if(view->xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
+        view->request_fullscreen.notify = xdg_surface_request_fullscreen;
+        wl_signal_add(&view->xdg_surface->toplevel->events.request_fullscreen,
+                &view->request_fullscreen);
     }
 }
 
@@ -1121,6 +1135,11 @@ static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
     }
 	wl_list_remove(&view->link);
     wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
+
+    if(view->xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL)
+    {
+        wl_list_remove(&view->request_fullscreen.link);
+    }
 }
 
 static void xdg_surface_destroy(struct wl_listener *listener, void *data) {
