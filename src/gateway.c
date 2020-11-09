@@ -54,6 +54,7 @@ enum tinywl_cursor_mode {
 };
 
 struct gateway_config {
+    char* kbd_layout;
     char* terminal;
     double mouse_sens;
 };
@@ -351,7 +352,7 @@ static void server_new_keyboard(struct tinywl_server *server,
 	/* We need to prepare an XKB keymap and assign it to the keyboard. This
 	 * assumes the defaults (e.g. layout = "us"). */
 	struct xkb_rule_names rules = { 0 };
-    rules.layout = "gb";  //TEMP
+    rules.layout = server->config->kbd_layout;
 
 	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	struct xkb_keymap *keymap = xkb_map_new_from_names(context, &rules,
@@ -1340,11 +1341,13 @@ int main(int argc, char *argv[]) {
                     // ENVIRONMENT SETUP
     setenv("QT_QPA_PLATFORMTHEME","qt5ct", 1);
     setenv("QT_QPA_PLATFORM", "wayland", 1);
+    setenv("MOZ_ENABLE_FIREFOX", "1", 1);
 
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
     server.config->mouse_sens = 0.5;
+    server.config->kbd_layout = "us";
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
