@@ -1341,7 +1341,7 @@ int main(int argc, char *argv[]) {
                     // ENVIRONMENT SETUP
     setenv("QT_QPA_PLATFORMTHEME","qt5ct", 1);
     setenv("QT_QPA_PLATFORM", "wayland", 1);
-    setenv("MOZ_ENABLE_FIREFOX", "1", 1);
+    setenv("MOZ_ENABLE_WAYLAND", "1", 1);
 
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
