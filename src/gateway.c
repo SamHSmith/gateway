@@ -1389,7 +1389,7 @@ int main(int argc, char *argv[]) {
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
     server.config->mouse_sens = 0.5;
-    server.config->kbd_layout = "us";
+    server.config->kbd_layout = "samorak";
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
