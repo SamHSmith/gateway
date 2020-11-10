@@ -99,6 +99,8 @@ struct tinywl_server {
 	struct wl_list outputs;
     struct gateway_panel* focused_panel;
 	struct wl_listener new_output;
+
+    float brightness;
 };
 
 struct gateway_panel_stack {
@@ -333,6 +335,17 @@ static void keyboard_handle_key(
             }
         }
     }
+
+    for(int i = 0; i < nsyms; i++) {
+        if(syms[i] == XKB_KEY_XF86MonBrightnessUp) {
+            server->brightness += 0.05;
+        }
+        if(syms[i] == XKB_KEY_XF86MonBrightnessDown) {
+            server->brightness -= 0.05;
+        }
+    }
+    if(server->brightness > 1.0) { server->brightness = 1.0; }
+else if(server->brightness< 0.0) { server->brightness = 0.0; }
 
 	if (!handled) {
 		/* Otherwise, we pass it along to the client. */
@@ -1016,6 +1029,15 @@ static void output_frame(struct wl_listener *listener, void *data) {
             0, 0, &rdata);
     }
 
+    float matrix[9] = {0};
+    matrix[0] = 2.0;
+    matrix[4] = 2.0;
+    matrix[2] = -1.0;
+    matrix[5] = -1.0;
+
+    float colour[4] = {0.0, 0.0, 0.0, 1.0 - output->server->brightness};
+    wlr_render_quad_with_matrix(renderer, colour, matrix);
+
 	/* Hardware cursors are rendered by the GPU on a separate plane, and can be
 	 * moved around without re-rendering what's beneath them - which is more
 	 * efficient. However, not all hardware supports hardware cursors. For this
@@ -1348,6 +1370,9 @@ int main(int argc, char *argv[]) {
     server.config->terminal = "foot";
     server.config->mouse_sens = 0.5;
     server.config->kbd_layout = "us";
+
+
+    server.brightness = 1.0;
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
