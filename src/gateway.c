@@ -378,6 +378,7 @@ static void keyboard_handle_key(
         }
     }
 
+    if(event->state != WLR_KEY_RELEASED) {
     for(int i = 0; i < nsyms; i++) {
         if(syms[i] == XKB_KEY_XF86MonBrightnessUp) {
             server->brightness += 0.05;
@@ -385,7 +386,16 @@ static void keyboard_handle_key(
         if(syms[i] == XKB_KEY_XF86MonBrightnessDown) {
             server->brightness -= 0.05;
         }
-    }
+        if(syms[i] == XKB_KEY_XF86AudioRaiseVolume) {
+            system("pamixer -i 10");
+        }
+        if(syms[i] == XKB_KEY_XF86AudioLowerVolume) {
+            system("pamixer -d 10");
+        }
+        if(syms[i] == XKB_KEY_XF86AudioMute) {
+            system("pamixer -t");
+        }
+    }}
     if(server->brightness > 1.0) { server->brightness = 1.0; }
 else if(server->brightness< 0.0) { server->brightness = 0.0; }
 
