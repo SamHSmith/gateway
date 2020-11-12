@@ -419,6 +419,26 @@ static void keyboard_handle_key(
 else if(server->brightness< 0.0) { server->brightness = 0.0; }
 
 	if (!handled) {
+        struct wlr_keyboard *wkeyboard = wlr_seat_get_keyboard(seat);
+        struct gateway_layer_surface* ls;
+        wl_list_for_each(ls, &server->layer_surfaces, link) {
+            if(!ls->mapped || !ls->surface->current.keyboard_interactive) { continue; }
+            handled = true;
+
+            wlr_seat_keyboard_notify_enter(seat, ls->surface->surface,
+                wkeyboard->keycodes, wkeyboard->num_keycodes, &wkeyboard->modifiers);
+            break;
+        }
+        if(!handled && server->focused_panel->focused_view != NULL)
+        {
+        if(server->focused_panel->focused_view->xdg_surface != NULL) {
+            wlr_seat_keyboard_notify_enter(seat, server->focused_panel->focused_view->xdg_surface->surface,
+                wkeyboard->keycodes, wkeyboard->num_keycodes, &wkeyboard->modifiers);
+        }else if(server->focused_panel->focused_view->xwayland_surface != NULL) {
+            wlr_seat_keyboard_notify_enter(seat, server->focused_panel->focused_view->xwayland_surface->surface,
+                wkeyboard->keycodes, wkeyboard->num_keycodes, &wkeyboard->modifiers);
+        }
+        }
 		/* Otherwise, we pass it along to the client. */
 		wlr_seat_set_keyboard(seat, keyboard->device);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec,
@@ -1070,7 +1090,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     //Background wlr-layer-shell
     struct gateway_layer_surface* ls;
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 0) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 0) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1082,7 +1103,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 1) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 1) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1171,7 +1193,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 2) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 2) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1183,7 +1206,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 3) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 3) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
