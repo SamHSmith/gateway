@@ -43,7 +43,9 @@
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/xwayland.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/util/log.h>
+#include <assert.h>
 #include <xkbcommon/xkbcommon.h>
 
 /* For brevity's sake, struct members are annotated where they are used. */
@@ -73,6 +75,10 @@ struct tinywl_server {
 
     struct wlr_xwayland* xwayland;
     struct wl_listener new_xwayland_surface;
+
+    struct wlr_layer_shell_v1* layer_shell;
+    struct wl_listener new_layer_surface;
+    struct wl_list layer_surfaces;
 
 	struct wlr_cursor *cursor;
 	struct wlr_xcursor_manager *cursor_mgr;
@@ -113,6 +119,8 @@ struct gateway_panel {
 
     struct gateway_panel_stack* stacks;
     int32_t stack_count;
+
+    struct tinywl_output* main_output;
 };
 
 struct tinywl_output {
@@ -141,6 +149,17 @@ struct tinywl_view {
     bool is_fullscreen;
     struct gateway_panel* focused_by;
     int32_t stack_index;
+};
+
+struct gateway_layer_surface {
+    struct wl_list link;
+    struct tinywl_server* server;
+    struct wlr_layer_surface_v1* surface;
+    bool mapped;
+
+    struct wl_listener map;
+    struct wl_listener unmap;
+    struct wl_listener destroy;
 };
 
 struct tinywl_keyboard {
@@ -711,7 +730,8 @@ static void server_cursor_frame(struct wl_listener *listener, void *data) {
 struct render_data {
 	struct wlr_output *output;
 	struct wlr_renderer *renderer;
-	struct tinywl_view *view;
+    struct tinywl_view *view;
+    struct gateway_layer_surface* ls;
 	struct timespec *when;
 };
 
@@ -780,6 +800,47 @@ static void render_surface(struct wlr_surface *surface,
 	/* This lets the client know that we've displayed that frame and it can
 	 * prepare another one now if it likes. */
 	wlr_surface_send_frame_done(surface, rdata->when);
+}
+
+static void render_layer_surface(struct wlr_surface *surface,
+        int sx, int sy, void *data) {
+    /* This function is called for every surface that needs to be rendered. */
+    struct render_data *rdata = data;
+    struct gateway_layer_surface* view = rdata->ls;
+    struct wlr_output *output = rdata->output;
+ 
+    /* We first obtain a wlr_texture, which is a GPU resource. wlroots
+     * automatically handles negotiating these with the client. The underlying
+     * resource could be an opaque handle passed from the client, or the client
+     * could have sent a pixel buffer which we copied to the GPU, or a few other
+     * means. You don't have to worry about this, wlroots takes care of it. */
+    struct wlr_texture *texture = wlr_surface_get_texture(surface);
+    if (texture == NULL) {
+        return;
+    }
+
+    double ox = 0.0;
+    double oy = 0.0;
+    struct wlr_box box = {
+        .x = ox * output->scale,
+        .y = oy * output->scale,
+        .width = surface->current.width * output->scale,
+        .height = surface->current.height * output->scale,
+    };
+ 
+    float matrix[9];
+    enum wl_output_transform transform =
+        wlr_output_transform_invert(surface->current.transform);
+    wlr_matrix_project_box(matrix, &box, transform, 0,
+        output->transform_matrix);
+ 
+    /* This takes our matrix, the texture, and an alpha, and performs the actual
+     * rendering on the GPU. */
+    wlr_render_texture_with_matrix(rdata->renderer, texture, matrix, 1);
+
+    /* This lets the client know that we've displayed that frame and it can
+     * prepare another one now if it likes. */
+    wlr_surface_send_frame_done(surface, rdata->when);
 }
 
 static bool output_contains_stack(struct tinywl_output* output, int32_t s)
@@ -1015,6 +1076,19 @@ static void output_frame(struct wl_listener *listener, void *data) {
             0, 0, &rdata);
     }
 
+    struct gateway_layer_surface* ls;
+    wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
+        if(!ls->mapped) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .ls = ls,
+            .renderer = renderer,
+            .when = &now,
+        };
+        render_layer_surface(ls->surface->surface,
+            0, 0, &rdata);
+    }
+
 	/* Hardware cursors are rendered by the GPU on a separate plane, and can be
 	 * moved around without re-rendering what's beneath them - which is more
 	 * efficient. However, not all hardware supports hardware cursors. For this
@@ -1063,6 +1137,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wl_list_insert(&server->outputs, &output->link);
 
     output->panel = server->focused_panel; //TODO add proper panel and output management.
+    if(output->panel->main_output == NULL) { output->panel->main_output = output; }
 
     output->stacks = calloc(2, sizeof(int32_t));
     output->stack_count = 2;
@@ -1190,6 +1265,24 @@ static void xwayland_surface_map(struct wl_listener *listener, void *data) {
     }
 }
 
+static void layer_surface_map(struct wl_listener *listener, void *data) {
+    /* Called when the surface is mapped, or ready to display on-screen. */
+    struct gateway_layer_surface *view = wl_container_of(listener, view, map);
+
+    view->mapped = true;
+}
+ 
+static void layer_surface_unmap(struct wl_listener *listener, void *data) {
+    struct gateway_layer_surface *view = wl_container_of(listener, view, map);
+    view->mapped = false;
+}
+ 
+static void layer_surface_destroy(struct wl_listener *listener, void *data) {
+    struct gateway_layer_surface *view = wl_container_of(listener, view, destroy);
+    wl_list_remove(&view->link);
+    free(view);
+}
+
 static void begin_interactive(struct tinywl_view *view,
 		enum tinywl_cursor_mode mode, uint32_t edges) {
 	/* This function sets up an interactive move or resize operation, where the
@@ -1308,6 +1401,36 @@ static void server_new_xwayland_surface(struct wl_listener *listener, void *data
     wl_list_insert(&server->focused_panel->unmapped_views, &view->link);
 }
 
+static void server_new_layer_surface(struct wl_listener *listener, void *data) {
+    /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
+     * client, either a toplevel (application window) or popup. */
+    struct tinywl_server *server =
+        wl_container_of(listener, server, new_layer_surface);
+    struct wlr_layer_surface_v1* layer_surface = data;
+
+    /* Allocate a tinywl_view for this surface */
+    struct gateway_layer_surface *view =
+        calloc(1, sizeof(struct gateway_layer_surface));
+    view->server = server;
+    view->surface = layer_surface;
+
+    view->map.notify = layer_surface_map;
+    wl_signal_add(&layer_surface->events.map, &view->map);
+    view->unmap.notify = layer_surface_unmap;
+    wl_signal_add(&layer_surface->events.unmap, &view->unmap);
+    view->destroy.notify = layer_surface_destroy;
+    wl_signal_add(&layer_surface->events.destroy, &view->destroy);
+
+    if(view->surface->output == NULL)
+    {
+        view->surface->output = server->focused_panel->main_output->wlr_output;
+    }
+
+    wlr_layer_surface_v1_configure(view->surface, 100, 100);
+ 
+    wl_list_insert(&server->layer_surfaces, &view->link);
+}
+
 static void server_new_xdg_decoration(struct wl_listener* listener, void* data)
 {
     struct wlr_xdg_toplevel_decoration_v1* decoration = data;
@@ -1419,6 +1542,13 @@ int main(int argc, char *argv[]) {
     server.new_xwayland_surface.notify = server_new_xwayland_surface;
     wl_signal_add(&server.xwayland->events.new_surface,
             &server.new_xwayland_surface);
+
+    // Layer Shell
+    server.layer_shell = wlr_layer_shell_v1_create(server.wl_display);
+    server.new_layer_surface.notify = server_new_layer_surface;
+    wl_signal_add(&server.layer_shell->events.new_surface,
+            &server.new_layer_surface);
+    wl_list_init(&server.layer_surfaces);
 
 	/*
 	 * Creates a cursor, which is a wlroots utility for tracking the cursor
