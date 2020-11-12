@@ -58,6 +58,7 @@ enum tinywl_cursor_mode {
 struct gateway_config {
     char* kbd_layout;
     char* terminal;
+    char* launcher;
     double mouse_sens;
 };
 
@@ -337,6 +338,11 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         break;
     case XKB_KEY_Return:
         strcpy(cmd, server->config->terminal);
+        strcat(cmd, " &");
+        system(cmd);
+        break;
+    case XKB_KEY_d:
+        strcpy(cmd, server->config->launcher);
         strcat(cmd, " &");
         system(cmd);
         break;
@@ -1611,6 +1617,7 @@ int main(int argc, char *argv[]) {
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
+    server.config->launcher = "wofi --show drun -Ii";
     server.config->mouse_sens = 0.5;
     server.config->kbd_layout = "samorak";
 
