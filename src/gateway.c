@@ -56,6 +56,7 @@ enum tinywl_cursor_mode {
 };
 
 struct gateway_config {
+    char* kbd_layout;
     char* terminal;
     double mouse_sens;
 };
@@ -104,6 +105,8 @@ struct tinywl_server {
 	struct wl_list outputs;
     struct gateway_panel* focused_panel;
 	struct wl_listener new_output;
+
+    float brightness;
 };
 
 struct gateway_panel_stack {
@@ -352,6 +355,27 @@ static void keyboard_handle_key(
         }
     }
 
+    if(event->state != WLR_KEY_RELEASED) {
+    for(int i = 0; i < nsyms; i++) {
+        if(syms[i] == XKB_KEY_XF86MonBrightnessUp) {
+            server->brightness += 0.05;
+        }
+        if(syms[i] == XKB_KEY_XF86MonBrightnessDown) {
+            server->brightness -= 0.05;
+        }
+        if(syms[i] == XKB_KEY_XF86AudioRaiseVolume) {
+            system("pamixer -i 10");
+        }
+        if(syms[i] == XKB_KEY_XF86AudioLowerVolume) {
+            system("pamixer -d 10");
+        }
+        if(syms[i] == XKB_KEY_XF86AudioMute) {
+            system("pamixer -t");
+        }
+    }}
+    if(server->brightness > 1.0) { server->brightness = 1.0; }
+else if(server->brightness< 0.0) { server->brightness = 0.0; }
+
 	if (!handled) {
 		/* Otherwise, we pass it along to the client. */
 		wlr_seat_set_keyboard(seat, keyboard->device);
@@ -370,7 +394,7 @@ static void server_new_keyboard(struct tinywl_server *server,
 	/* We need to prepare an XKB keymap and assign it to the keyboard. This
 	 * assumes the defaults (e.g. layout = "us"). */
 	struct xkb_rule_names rules = { 0 };
-    rules.layout = "gb";  //TEMP
+    rules.layout = server->config->kbd_layout;
 
 	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	struct xkb_keymap *keymap = xkb_map_new_from_names(context, &rules,
@@ -1076,6 +1100,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
             0, 0, &rdata);
     }
 
+
     struct gateway_layer_surface* ls;
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
         if(!ls->mapped) { continue; }
@@ -1088,6 +1113,15 @@ static void output_frame(struct wl_listener *listener, void *data) {
         render_layer_surface(ls->surface->surface,
             0, 0, &rdata);
     }
+
+    float matrix[9] = {0};
+    matrix[0] = 2.0;
+    matrix[4] = 2.0;
+    matrix[2] = -1.0;
+    matrix[5] = -1.0;
+
+    float colour[4] = {0.0, 0.0, 0.0, 1.0 - output->server->brightness};
+    wlr_render_quad_with_matrix(renderer, colour, matrix);
 
 	/* Hardware cursors are rendered by the GPU on a separate plane, and can be
 	 * moved around without re-rendering what's beneath them - which is more
@@ -1463,11 +1497,16 @@ int main(int argc, char *argv[]) {
                     // ENVIRONMENT SETUP
     setenv("QT_QPA_PLATFORMTHEME","qt5ct", 1);
     setenv("QT_QPA_PLATFORM", "wayland", 1);
+    setenv("MOZ_ENABLE_WAYLAND", "1", 1);
 
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
     server.config->mouse_sens = 0.5;
+    server.config->kbd_layout = "us";
+
+
+    server.brightness = 1.0;
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
