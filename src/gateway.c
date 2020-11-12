@@ -1023,6 +1023,32 @@ static void output_frame(struct wl_listener *listener, void *data) {
 	float color[4] = {0.3, 0.3, 0.3, 1.0};
 	wlr_renderer_clear(renderer, color);
 
+    //Background wlr-layer-shell
+    struct gateway_layer_surface* ls;
+    wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
+        if(!ls->mapped || ls->surface->current.layer != 0) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .ls = ls,
+            .renderer = renderer,
+            .when = &now,
+        };
+        wlr_layer_surface_v1_for_each_surface(ls->surface,
+            render_layer_surface, &rdata);
+    }
+
+    wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
+        if(!ls->mapped || ls->surface->current.layer != 1) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .ls = ls,
+            .renderer = renderer,
+            .when = &now,
+        };
+        wlr_layer_surface_v1_for_each_surface(ls->surface,
+            render_layer_surface, &rdata);
+    }
+
 	/* Each subsequent window we render is rendered on top of the last. Because
 	 * our view list is ordered front-to-back, we iterate over it backwards. */
 	struct tinywl_view *view;
@@ -1100,18 +1126,28 @@ static void output_frame(struct wl_listener *listener, void *data) {
             0, 0, &rdata);
     }
 
-
-    struct gateway_layer_surface* ls;
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped) { continue; }
+        if(!ls->mapped || ls->surface->current.layer != 2) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
             .renderer = renderer,
             .when = &now,
         };
-        render_layer_surface(ls->surface->surface,
-            0, 0, &rdata);
+        wlr_layer_surface_v1_for_each_surface(ls->surface,
+            render_layer_surface, &rdata);
+    }
+
+    wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
+        if(!ls->mapped || ls->surface->current.layer != 3) { continue; }
+        struct render_data rdata = {
+            .output = output->wlr_output,
+            .ls = ls,
+            .renderer = renderer,
+            .when = &now,
+        };
+        wlr_layer_surface_v1_for_each_surface(ls->surface,
+            render_layer_surface, &rdata);
     }
 
     float matrix[9] = {0};
@@ -1459,8 +1495,13 @@ static void server_new_layer_surface(struct wl_listener *listener, void *data) {
     {
         view->surface->output = server->focused_panel->main_output->wlr_output;
     }
+    uint32_t w = view->surface->current.desired_width;
+    uint32_t h = view->surface->current.desired_height;
+    uint32_t anchor = view->surface->current.anchor;
+    if(anchor & (1|2) == (1|2)) { h = view->surface->output->height; }
+    if(anchor & (4|8) == (4|8)) { w = view->surface->output->width; }
 
-    wlr_layer_surface_v1_configure(view->surface, 100, 100);
+    wlr_layer_surface_v1_configure(view->surface, w, h);
  
     wl_list_insert(&server->layer_surfaces, &view->link);
 }
