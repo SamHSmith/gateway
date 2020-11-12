@@ -1026,7 +1026,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     //Background wlr-layer-shell
     struct gateway_layer_surface* ls;
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 0) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 0) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1038,7 +1039,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 1) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 1) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1127,7 +1129,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 2) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 2) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
@@ -1139,7 +1142,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     }
 
     wl_list_for_each_reverse(ls, &output->server->layer_surfaces, link) {
-        if(!ls->mapped || ls->surface->current.layer != 3) { continue; }
+        if(!ls->mapped || ls->surface->output != output->wlr_output ||
+            ls->surface->current.layer != 3) { continue; }
         struct render_data rdata = {
             .output = output->wlr_output,
             .ls = ls,
