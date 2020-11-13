@@ -57,6 +57,7 @@ enum tinywl_cursor_mode {
 
 struct gateway_config {
     char* kbd_layout;
+    char* kbd_variant;
     char* terminal;
     char* launcher;
     double mouse_sens;
@@ -421,6 +422,7 @@ static void server_new_keyboard(struct tinywl_server *server,
 	 * assumes the defaults (e.g. layout = "us"). */
 	struct xkb_rule_names rules = { 0 };
     rules.layout = server->config->kbd_layout;
+    rules.variant = server->config->kbd_variant;
 
 	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	struct xkb_keymap *keymap = xkb_map_new_from_names(context, &rules,
@@ -1576,6 +1578,7 @@ int main(int argc, char *argv[]) {
     server.config->launcher = "wofi --show drun -Ii";
     server.config->mouse_sens = 0.5;
     server.config->kbd_layout = "us";
+    server.config->kbd_variant = NULL;
 
 
     server.brightness = 1.0;
