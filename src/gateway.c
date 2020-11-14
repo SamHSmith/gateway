@@ -192,15 +192,10 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
         surface = view->xdg_surface->surface;
     }
 	if (prev_surface == surface) {
-		/* Don't re-focus an already focused surface. */
-		return;
+		/* Don't re-focus an already focused surface. */// because X we can't do this. :(
+		return; // Oh no it's a lot worse. We have to have this because X
 	}
-	if (prev_surface) {
-		/*
-		 * Deactivate the previously focused surface. This lets the client know
-		 * it no longer has focus and the client will repaint accordingly, e.g.
-		 * stop displaying a caret.
-		 */
+    if(prev_surface) {
 		if(wlr_surface_is_xdg_surface(prev_surface))
         {
             struct wlr_xdg_surface *previous = wlr_xdg_surface_from_wlr_surface(
@@ -215,6 +210,12 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
             wlr_xwayland_surface_activate(previous, false);
         }
 	}
+    struct tinywl_view* other_view;
+    wl_list_for_each(other_view, &server->focused_panel->views, link) {
+        if(other_view->xwayland_surface != NULL) {
+            wlr_xwayland_surface_activate(other_view->xwayland_surface, false);
+        }
+    }
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
     if(panel->focused_view != NULL) {
         panel->focused_view->focused_by = NULL;
@@ -554,7 +555,7 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
 
 static bool view_at(struct tinywl_view *view,
 		double lx, double ly, struct wlr_surface **surface,
-		double *sx, double *sy, double* scale_x, double* scale_y) {
+		double *sx, double *sy) {
 	/*
 	 * XDG toplevels may have nested surfaces, such as popup windows for context
 	 * menus or tooltips. This function tests if any of those are underneath the
@@ -586,17 +587,18 @@ static bool view_at(struct tinywl_view *view,
         if(view_sx >= 0 && view_sx < view->width
             && view_sy >= 0 && view_sy < view->height)
         {
-            _sx = view_sx;
-            _sy = view_sy;
+            double scale_x = 1.0; double scale_y = 1.0;
             _surface = view->xwayland_surface->surface;
             if(view->width != 0 && view->xwayland_surface->width != 0)
             {
-                *scale_x= ((double)view->xwayland_surface->width) / ((double)view->width);
+                scale_x= ((double)view->xwayland_surface->width) / ((double)view->width);
             }
             if(view->height != 0 && view->xwayland_surface->height != 0)
             {
-                *scale_y= ((double)view->xwayland_surface->height) / ((double)view->height);
+                scale_y= ((double)view->xwayland_surface->height) / ((double)view->height);
             }
+            _sx = view_sx * scale_x;
+            _sy = view_sy * scale_y;
         }
     }
 
@@ -612,25 +614,26 @@ static bool view_at(struct tinywl_view *view,
 
 static struct tinywl_view *desktop_view_at(
 		struct tinywl_server *server, double lx, double ly,
-		struct wlr_surface **surface, double *sx, double *sy, double* scale_x, double* scale_y) {
+		struct wlr_surface **surface, double *sx, double *sy)
+{
 	/* This iterates over all of our surfaces and attempts to find one under the
 	 * cursor. This relies on server->views being ordered from top-to-bottom. */
 	struct tinywl_view *view;
     wl_list_for_each(view, &server->focused_panel->views, link) {
         if(view->focused_by == NULL) { continue; }
-        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+        if (view_at(view, lx, ly, surface, sx, sy)) {
             return view;
         }
     }
     wl_list_for_each(view, &server->focused_panel->views, link) {
         if(!view->is_fullscreen || view->focused_by != NULL) { continue; }
-        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+        if (view_at(view, lx, ly, surface, sx, sy)) {
             return view;
         }
     }
     wl_list_for_each(view, &server->focused_panel->views, link) {
         if(view->is_fullscreen || view->focused_by != NULL) { continue; }
-        if (view_at(view, lx, ly, surface, sx, sy, scale_x, scale_y)) {
+        if (view_at(view, lx, ly, surface, sx, sy)) {
             return view;
         }
     }
@@ -707,18 +710,20 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 
 	/* Otherwise, find the view under the pointer and send the event along. */
 	double sx, sy;
-    double scale_x = 1.0, scale_y = 1.0;
 	struct wlr_seat *seat = server->seat;
 	struct wlr_surface *surface = NULL;
 	struct tinywl_view *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface, &sx, &sy, &scale_x, &scale_y);
+			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 	if (!view) {
 		/* If there's no view under the cursor, set the cursor image to a
 		 * default. This is what makes the cursor image appear when you move it
 		 * around the screen, not over any views. */
 		wlr_xcursor_manager_set_cursor_image(
 				server->cursor_mgr, "left_ptr", server->cursor);
-	}
+	} else
+    {
+        focus_view(view, view->server->focused_panel);
+    }
 	if (surface) {
 		bool focus_changed = seat->pointer_state.focused_surface != surface;
 		/*
@@ -729,11 +734,11 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 		 * from keyboard focus. You get pointer focus by moving the pointer over
 		 * a window.
 		 */
-		wlr_seat_pointer_notify_enter(seat, surface, sx*scale_x, sy*scale_y);
+		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
 		if (!focus_changed) {
 			/* The enter event contains coordinates, so we only need to notify
 			 * on motion if the focus did not change. */
-			wlr_seat_pointer_notify_motion(seat, time, sx*scale_x, sy*scale_y);
+			wlr_seat_pointer_notify_motion(seat, time, sx, sy);
 		}
 	} else {
 		/* Clear pointer focus so future button events and such are not sent to
@@ -783,16 +788,12 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
 	wlr_seat_pointer_notify_button(server->seat,
 			event->time_msec, event->button, event->state);
 	double sx, sy;
-    double scale_x = 1.0, scale_y = 1.0;
 	struct wlr_surface *surface;
 	struct tinywl_view *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface, &sx, &sy, &scale_x, &scale_y);
+			server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 	if (event->state == WLR_BUTTON_RELEASED) {
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		server->cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
-	} else {
-		/* Focus that client if the button was _pressed_ */
-		focus_view(view, server->focused_panel);
 	}
 }
 
@@ -1042,7 +1043,7 @@ while(!is_done) {
             if(view->xwayland_surface->size_hints->max_height > 0 &&
         view->xwayland_surface->size_hints->max_height < h) { h = view->xwayland_surface->size_hints->max_height; }
 
-            wlr_xwayland_surface_configure(view->xwayland_surface, view->x, view->y,
+            wlr_xwayland_surface_configure(view->xwayland_surface, 0, 0,
                 w, h);
         } else if(view->xdg_surface != NULL)
         {
