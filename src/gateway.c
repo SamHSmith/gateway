@@ -60,6 +60,7 @@ struct gateway_config {
     char* terminal;
     char* launcher;
     double mouse_sens;
+    uint32_t window_gaps;
 };
 
 struct tinywl_server {
@@ -974,6 +975,7 @@ static void panel_update(struct gateway_panel* panel, struct tinywl_output* outp
     );
     int32_t x= output_layout->x;
     int32_t last_stack = 0;
+
     for(int i = 0; i < panel->stack_count; i++)
     {
         if(!panel->stacks[i].mapped) { continue; }
@@ -1015,15 +1017,16 @@ while(!is_done) {
     view->stack_index = sid;
 }
 }
-
+    uint32_t gaps = output->server->config->window_gaps;
     wl_list_for_each(view, &panel->views, link)
     {
         if(!output_contains_stack(output, view->stack_index)) { continue; }
-        view->width = panel->stacks[view->stack_index].width;
+        view->width = panel->stacks[view->stack_index].width - 2*gaps;
         view->height = panel->stacks[view->stack_index].height / panel->stacks[view->stack_index].item_count;
-        view->x = panel->stacks[view->stack_index].current_x;
-        view->y = panel->stacks[view->stack_index].current_y;
+        view->x = panel->stacks[view->stack_index].current_x + gaps;
+        view->y = panel->stacks[view->stack_index].current_y + gaps;
         panel->stacks[view->stack_index].current_y += view->height;
+        view->height -= 2*gaps;
 
         if(view->is_fullscreen)
         {
@@ -1621,6 +1624,7 @@ int main(int argc, char *argv[]) {
     server.config->launcher = "wofi --show drun -Ii";
     server.config->mouse_sens = 0.5;
     server.config->kbd_layout = "samorak";
+    server.config->window_gaps = 10;
 
 
     server.brightness = 1.0;
