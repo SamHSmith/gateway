@@ -305,7 +305,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         struct tinywl_view* next_view = wl_container_of(
             linknext, next_view, link);
 
-        focus_view(next_view, server->focused_panel);
+        focus_view(next_view, server->focused_panel, false);
         break;
 	case XKB_KEY_t:
 		if (wl_list_length(&server->focused_panel->views) < 2) {
@@ -327,7 +327,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         next_view = wl_container_of(
             server->focused_panel->views.prev, next_view, link);
  
-        focus_view(next_view, server->focused_panel);
+        focus_view(next_view, server->focused_panel, false);
         break;
     case XKB_KEY_H:
         current_view = server->focused_panel->focused_view;
