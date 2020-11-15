@@ -176,7 +176,7 @@ struct tinywl_keyboard {
 	struct wl_listener key;
 };
 
-static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
+static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bool mouse_focus) {
 	/* Note: this function only deals with keyboard focus. */
 	if (view == NULL) {
 		return;
@@ -234,6 +234,11 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel) {
         wlr_seat_keyboard_notify_enter(seat, surface,
             keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
     }
+    if(!mouse_focus)
+    {
+        wlr_cursor_warp(view->server->cursor, NULL, view->x + (view->width / 2),
+            view->y + (view->height / 2));
+    }
 }
 
 static void move_to_front(struct tinywl_view *view)
@@ -288,7 +293,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 		struct tinywl_view *next_view = wl_container_of(
 			linknext, next_view, link);
 
-		focus_view(next_view, server->focused_panel);
+		focus_view(next_view, server->focused_panel, false);
 		break;
     case XKB_KEY_F2:
         if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
@@ -679,7 +684,7 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 				server->cursor_mgr, "left_ptr", server->cursor);
 	} else
     {
-        focus_view(view, view->server->focused_panel);
+        focus_view(view, view->server->focused_panel, true);
     }
 	if (surface) {
 		bool focus_changed = seat->pointer_state.focused_surface != surface;
@@ -1284,7 +1289,7 @@ static void xdg_surface_map(struct wl_listener *listener, void *data) {
 	wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
 	if(wl_list_length(&view->server->focused_panel->views) <= 1) {
-        focus_view(view, view->server->focused_panel);
+        focus_view(view, view->server->focused_panel, false);
     }
 
     if(view->xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
@@ -1300,12 +1305,12 @@ static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
     if(view->focused_by != NULL) {
         if(view->link.next != &view->focused_by->views) {
             struct tinywl_view *new_view = wl_container_of(view->link.next, new_view, link);
-            focus_view(new_view, view->focused_by);
+            focus_view(new_view, view->focused_by, false);
             view->focused_by = NULL;
         } else {
             if(wl_list_length(&view->focused_by->views) > 1) {
                 struct tinywl_view *new_view = wl_container_of(view->link.prev, new_view, link);
-                focus_view(new_view, view->focused_by);
+                focus_view(new_view, view->focused_by, false);
                 view->focused_by = NULL;
             } else {
                 view->focused_by->focused_view = NULL;
@@ -1335,12 +1340,12 @@ static void xwayland_surface_unmap(struct wl_listener *listener, void *data) {
     if(view->focused_by != NULL) {
         if(view->link.next != &view->focused_by->views) {
             struct tinywl_view *new_view = wl_container_of(view->link.next, new_view, link);
-            focus_view(new_view, view->focused_by);
+            focus_view(new_view, view->focused_by, false);
             view->focused_by = NULL;
         } else {
             if(wl_list_length(&view->focused_by->views) > 1) {
                 struct tinywl_view *new_view = wl_container_of(view->link.prev, new_view, link);
-                focus_view(new_view, view->focused_by);
+                focus_view(new_view, view->focused_by, false);
                 view->focused_by = NULL;
             } else {
                 view->focused_by->focused_view = NULL;
@@ -1365,7 +1370,7 @@ static void xwayland_surface_map(struct wl_listener *listener, void *data) {
     wl_list_remove(&view->link);    
     wl_list_insert(view->server->focused_panel->views.prev, &view->link);
     if(wl_list_length(&view->server->focused_panel->views) <= 1) {
-        focus_view(view, view->server->focused_panel);
+        focus_view(view, view->server->focused_panel, false);
     }
 }
 
