@@ -45,6 +45,8 @@
 #include <wlr/xwayland.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/util/log.h>
 #include <assert.h>
 #include <xkbcommon/xkbcommon.h>
@@ -111,6 +113,8 @@ struct tinywl_server {
 	struct wl_listener new_output;
 
     struct wlr_screencopy_manager_v1* screencopy;
+    struct wlr_relative_pointer_manager_v1* relative_pointer;
+    struct wlr_pointer_constraints_v1* pointer_constraints;
 
     float brightness;
 };
@@ -711,13 +715,13 @@ static void process_cursor_resize(struct tinywl_server *server, uint32_t time) {
 
 static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	/* If the mode is non-passthrough, delegate to those functions. */
-	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
-		process_cursor_move(server, time);
-		return;
-	} else if (server->cursor_mode == TINYWL_CURSOR_RESIZE) {
-		process_cursor_resize(server, time);
-		return;
-	}
+//	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
+//		process_cursor_move(server, time);
+//		return;
+//	} else if (server->cursor_mode == TINYWL_CURSOR_RESIZE) {
+//		process_cursor_resize(server, time);
+//		return;
+//	}
 
 	/* Otherwise, find the view under the pointer and send the event along. */
 	double sx, sy;
@@ -769,8 +773,42 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
      * special configuration applied for the specific input device which
      * generated the event. You can pass NULL for the device if you want to move
      * the cursor around without any input. */
+    wlr_relative_pointer_manager_v1_send_relative_motion(
+        server->relative_pointer,
+        server->seat,
+        ((uint64_t)event->time_msec) * 1000,
+        event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens,
+        event->unaccel_dx, event->unaccel_dy);
     wlr_cursor_move(server->cursor, event->device,
             event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens);
+    struct wlr_surface* surface;
+    if(server->focused_panel->focused_view->xwayland_surface != NULL)
+    {
+        surface = server->focused_panel->focused_view->xwayland_surface->surface;
+    } else
+    {
+        surface = server->focused_panel->focused_view->xdg_surface->surface;
+    }
+    struct wlr_pointer_constraint_v1* constraint =
+        wlr_pointer_constraints_v1_constraint_for_surface(
+            server->pointer_constraints,
+            surface,
+            server->seat
+        );
+    if(constraint != NULL) {
+    if(constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
+        server->cursor->x = (double)server->focused_panel->focused_view->x + ((double)(server->focused_panel->focused_view->width) / 2.0);
+        server->cursor->y = (double)server->focused_panel->focused_view->y + ((double)(server->focused_panel->focused_view->height) / 2.0);
+    } else {
+        if(server->cursor->x < server->focused_panel->focused_view->x) { server->cursor->x = server->focused_panel->focused_view->x; }
+        else if(server->cursor->x > server->focused_panel->focused_view->x + server->focused_panel->focused_view->width)
+        { server->cursor->x = server->focused_panel->focused_view->x + server->focused_panel->focused_view->width; }
+
+        if(server->cursor->y < server->focused_panel->focused_view->y) { server->cursor->y = server->focused_panel->focused_view->y; }
+        else if(server->cursor->y > server->focused_panel->focused_view->y + server->focused_panel->focused_view->height)
+        { server->cursor->y = server->focused_panel->focused_view->y + server->focused_panel->focused_view->height; }
+    }
+    }
     process_cursor_motion(server, event->time_msec);
 }
 
@@ -1723,6 +1761,10 @@ int main(int argc, char *argv[]) {
 
     // Wlr Screencopy
     server.screencopy = wlr_screencopy_manager_v1_create(server.wl_display);
+
+    // Relative and constrained pointer
+    server.relative_pointer = wlr_relative_pointer_manager_v1_create(server.wl_display);
+    server.pointer_constraints = wlr_pointer_constraints_v1_create(server.wl_display);
 
 	/*
 	 * Creates a cursor, which is a wlroots utility for tracking the cursor
