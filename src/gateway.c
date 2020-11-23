@@ -185,6 +185,8 @@ struct tinywl_keyboard {
 	struct wl_listener key;
 };
 
+static void panel_update(struct gateway_panel* panel, struct tinywl_output* output);
+
 static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bool mouse_focus) {
 	/* Note: this function only deals with keyboard focus. */
 	if (view == NULL) {
@@ -200,6 +202,11 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bo
     } else if(view->xdg_surface != NULL)
     {
         surface = view->xdg_surface->surface;
+    }
+    if(!mouse_focus)
+    {
+        wlr_cursor_warp(view->server->cursor, NULL, view->x + (view->width / 2),
+            view->y + (view->height / 2));
     }
 	if (prev_surface == surface) {
 		/* Don't re-focus an already focused surface. */// because X we can't do this. :(
@@ -242,11 +249,6 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bo
         wlr_xwayland_surface_activate(view->xwayland_surface, true);
         wlr_seat_keyboard_notify_enter(seat, surface,
             keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-    }
-    if(!mouse_focus)
-    {
-        wlr_cursor_warp(view->server->cursor, NULL, view->x + (view->width / 2),
-            view->y + (view->height / 2));
     }
 }
 
@@ -312,7 +314,12 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 		focus_view(next_view, server->focused_panel, false);
 		break;
     case XKB_KEY_F2:
-        if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
+        if(server->focused_panel->focused_view != NULL)
+        {
+            move_to_front(server->focused_panel->focused_view);
+            panel_update(server->focused_panel, server->focused_panel->main_output);
+            focus_view(server->focused_panel->focused_view, server->focused_panel, false);
+        }
         break;
     case XKB_KEY_F3:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
