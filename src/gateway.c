@@ -545,6 +545,13 @@ static bool view_at(struct tinywl_view *view,
 	double view_sx = lx - view->x;
 	double view_sy = ly - view->y;
 
+    if(view->focused_by == NULL)
+    {
+        uint32_t gap = view->server->config->window_gaps; // lazy
+        if(view_sx < gap || view_sy < gap || view_sx > view->width - gap || view_sy > view->height - gap)
+        { return false; }
+    }
+
 	double _sx, _sy;
 	struct wlr_surface *_surface = NULL;
     if(view->xdg_surface != NULL)
