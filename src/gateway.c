@@ -337,7 +337,6 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 
 		focus_view(next_view, server->focused_panel, false);
 		break;
-<<<<<<< HEAD
     case XKB_KEY_n:
         if (wl_list_length(&server->focused_panel->views) < 2) {
             break;
