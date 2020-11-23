@@ -44,6 +44,7 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/xwayland.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/util/log.h>
 #include <assert.h>
 #include <xkbcommon/xkbcommon.h>
@@ -108,6 +109,8 @@ struct tinywl_server {
 	struct wl_list outputs;
     struct gateway_panel* focused_panel;
 	struct wl_listener new_output;
+
+    struct wlr_screencopy_manager_v1* screencopy;
 
     float brightness;
 };
@@ -1717,6 +1720,9 @@ int main(int argc, char *argv[]) {
     wl_signal_add(&server.layer_shell->events.new_surface,
             &server.new_layer_surface);
     wl_list_init(&server.layer_surfaces);
+
+    // Wlr Screencopy
+    server.screencopy = wlr_screencopy_manager_v1_create(server.wl_display);
 
 	/*
 	 * Creates a cursor, which is a wlroots utility for tracking the cursor
