@@ -117,6 +117,7 @@ struct tinywl_server {
     struct wlr_pointer_constraints_v1* pointer_constraints;
 
     float brightness;
+    bool passthrough_enabled;
 };
 
 struct gateway_panel_stack {
@@ -276,6 +277,13 @@ static void keyboard_handle_modifiers(
 }
 
 static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
+    if(server->passthrough_enabled && sym != XKB_KEY_F12) {
+        return false;
+    }
+    if(sym == XKB_KEY_F12) {
+        server->passthrough_enabled = !server->passthrough_enabled;
+        return true;
+    }
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
 	 * processing keys, rather than passing them on to the client for its own
