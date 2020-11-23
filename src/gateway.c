@@ -44,6 +44,9 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/xwayland.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/util/log.h>
 #include <assert.h>
 #include <xkbcommon/xkbcommon.h>
@@ -109,7 +112,12 @@ struct tinywl_server {
     struct gateway_panel* focused_panel;
 	struct wl_listener new_output;
 
+    struct wlr_screencopy_manager_v1* screencopy;
+    struct wlr_relative_pointer_manager_v1* relative_pointer;
+    struct wlr_pointer_constraints_v1* pointer_constraints;
+
     float brightness;
+    bool passthrough_enabled;
 };
 
 struct gateway_panel_stack {
@@ -177,6 +185,8 @@ struct tinywl_keyboard {
 	struct wl_listener key;
 };
 
+static void panel_update(struct gateway_panel* panel, struct tinywl_output* output);
+
 static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bool mouse_focus) {
 	/* Note: this function only deals with keyboard focus. */
 	if (view == NULL) {
@@ -192,6 +202,11 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bo
     } else if(view->xdg_surface != NULL)
     {
         surface = view->xdg_surface->surface;
+    }
+    if(!mouse_focus)
+    {
+        wlr_cursor_warp(view->server->cursor, NULL, view->x + (view->width / 2),
+            view->y + (view->height / 2));
     }
 	if (prev_surface == surface) {
 		/* Don't re-focus an already focused surface. */// because X we can't do this. :(
@@ -234,11 +249,6 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bo
         wlr_xwayland_surface_activate(view->xwayland_surface, true);
         wlr_seat_keyboard_notify_enter(seat, surface,
             keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-    }
-    if(!mouse_focus)
-    {
-        wlr_cursor_warp(view->server->cursor, NULL, view->x + (view->width / 2),
-            view->y + (view->height / 2));
     }
 }
 
@@ -283,6 +293,13 @@ static void list_swap(struct wl_list* a, struct wl_list* b) // swaps order in vi
     linknext->prev = a;
 }
 static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
+    if(server->passthrough_enabled && sym != XKB_KEY_F12) {
+        return false;
+    }
+    if(sym == XKB_KEY_F12) {
+        server->passthrough_enabled = !server->passthrough_enabled;
+        return true;
+    }
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
 	 * processing keys, rather than passing them on to the client for its own
@@ -320,6 +337,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 
 		focus_view(next_view, server->focused_panel, false);
 		break;
+<<<<<<< HEAD
     case XKB_KEY_n:
         if (wl_list_length(&server->focused_panel->views) < 2) {
             break;
@@ -339,7 +357,12 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
         list_swap(&current_view->link, current_view->link.next);
         break;
     case XKB_KEY_M | XKB_KEY_m:
-        if(server->focused_panel->focused_view != NULL) { move_to_front(server->focused_panel->focused_view); }
+        if(server->focused_panel->focused_view != NULL)
+        {
+            move_to_front(server->focused_panel->focused_view);
+            panel_update(server->focused_panel, server->focused_panel->main_output);
+            focus_view(server->focused_panel->focused_view, server->focused_panel, false);
+        }
         break;
     case XKB_KEY_F | XKB_KEY_f:
         server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
@@ -574,6 +597,13 @@ static bool view_at(struct tinywl_view *view,
 	double view_sx = lx - view->x;
 	double view_sy = ly - view->y;
 
+    if(view->focused_by == NULL)
+    {
+        uint32_t gap = view->server->config->window_gaps; // lazy
+        if(view_sx < gap || view_sy < gap || view_sx > view->width - gap || view_sy > view->height - gap)
+        { return false; }
+    }
+
 	double _sx, _sy;
 	struct wlr_surface *_surface = NULL;
     if(view->xdg_surface != NULL)
@@ -708,13 +738,13 @@ static void process_cursor_resize(struct tinywl_server *server, uint32_t time) {
 
 static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
 	/* If the mode is non-passthrough, delegate to those functions. */
-	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
-		process_cursor_move(server, time);
-		return;
-	} else if (server->cursor_mode == TINYWL_CURSOR_RESIZE) {
-		process_cursor_resize(server, time);
-		return;
-	}
+//	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
+//		process_cursor_move(server, time);
+//		return;
+//	} else if (server->cursor_mode == TINYWL_CURSOR_RESIZE) {
+//		process_cursor_resize(server, time);
+//		return;
+//	}
 
 	/* Otherwise, find the view under the pointer and send the event along. */
 	double sx, sy;
@@ -766,8 +796,42 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
      * special configuration applied for the specific input device which
      * generated the event. You can pass NULL for the device if you want to move
      * the cursor around without any input. */
+    wlr_relative_pointer_manager_v1_send_relative_motion(
+        server->relative_pointer,
+        server->seat,
+        ((uint64_t)event->time_msec) * 1000,
+        event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens,
+        event->unaccel_dx, event->unaccel_dy);
     wlr_cursor_move(server->cursor, event->device,
             event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens);
+    struct wlr_surface* surface;
+    if(server->focused_panel->focused_view->xwayland_surface != NULL)
+    {
+        surface = server->focused_panel->focused_view->xwayland_surface->surface;
+    } else
+    {
+        surface = server->focused_panel->focused_view->xdg_surface->surface;
+    }
+    struct wlr_pointer_constraint_v1* constraint =
+        wlr_pointer_constraints_v1_constraint_for_surface(
+            server->pointer_constraints,
+            surface,
+            server->seat
+        );
+    if(constraint != NULL) {
+    if(constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
+        server->cursor->x = (double)server->focused_panel->focused_view->x + ((double)(server->focused_panel->focused_view->width) / 2.0);
+        server->cursor->y = (double)server->focused_panel->focused_view->y + ((double)(server->focused_panel->focused_view->height) / 2.0);
+    } else {
+        if(server->cursor->x < server->focused_panel->focused_view->x) { server->cursor->x = server->focused_panel->focused_view->x; }
+        else if(server->cursor->x > server->focused_panel->focused_view->x + server->focused_panel->focused_view->width)
+        { server->cursor->x = server->focused_panel->focused_view->x + server->focused_panel->focused_view->width; }
+
+        if(server->cursor->y < server->focused_panel->focused_view->y) { server->cursor->y = server->focused_panel->focused_view->y; }
+        else if(server->cursor->y > server->focused_panel->focused_view->y + server->focused_panel->focused_view->height)
+        { server->cursor->y = server->focused_panel->focused_view->y + server->focused_panel->focused_view->height; }
+    }
+    }
     process_cursor_motion(server, event->time_msec);
 }
 
@@ -1717,6 +1781,13 @@ int main(int argc, char *argv[]) {
     wl_signal_add(&server.layer_shell->events.new_surface,
             &server.new_layer_surface);
     wl_list_init(&server.layer_surfaces);
+
+    // Wlr Screencopy
+    server.screencopy = wlr_screencopy_manager_v1_create(server.wl_display);
+
+    // Relative and constrained pointer
+    server.relative_pointer = wlr_relative_pointer_manager_v1_create(server.wl_display);
+    server.pointer_constraints = wlr_pointer_constraints_v1_create(server.wl_display);
 
 	/*
 	 * Creates a cursor, which is a wlroots utility for tracking the cursor

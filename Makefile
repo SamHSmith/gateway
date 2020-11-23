@@ -18,9 +18,13 @@ xdg-shell-protocol.c: xdg-shell-protocol.h
 
 wlr-layer-shell-unstable-v1-protocol.h:
 	$(WAYLAND_SCANNER) server-header \
-        wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml $@
+		wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml $@
 
-gateway: src/* xdg-shell-protocol.h xdg-shell-protocol.c wlr-layer-shell-unstable-v1-protocol.h
+pointer-constraints-unstable-v1-protocol.h:
+	$(WAYLAND_SCANNER) server-header \
+		$(WAYLAND_PROTOCOLS)/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml $@
+
+gateway: src/* xdg-shell-protocol.h xdg-shell-protocol.c wlr-layer-shell-unstable-v1-protocol.h pointer-constraints-unstable-v1-protocol.h
 	$(CC) $(CFLAGS) \
 		-g -Werror -I. \
 		-DWLR_USE_UNSTABLE \
@@ -28,7 +32,7 @@ gateway: src/* xdg-shell-protocol.h xdg-shell-protocol.c wlr-layer-shell-unstabl
 		$(LIBS)
 
 clean:
-	rm -f gateway xdg-shell-protocol.h xdg-shell-protocol.c
+	rm -f gateway xdg-shell-protocol.h xdg-shell-protocol.c wlr-layer-shell-unstable-v1-protocol.h pointer-constraints-unstable-v1-protocol.h
 
 .DEFAULT_GOAL=gateway
 .PHONY: clean
