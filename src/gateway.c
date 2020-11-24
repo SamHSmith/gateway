@@ -1825,6 +1825,13 @@ int main(int argc, char *argv[]) {
 			execl("/bin/sh", "/bin/sh", "-c", startup_cmd, (void *)NULL);
 		}
 	}
+    char startup_file_path[128];
+    strcpy(startup_file_path, getenv("HOME"));
+    strcat(startup_file_path, "/.config/gateway/startup.sh");
+    if( access(startup_file_path, X_OK ) != -1 ) {
+        system(startup_file_path);
+    }
+
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
 	 * loop configuration to listen to libinput events, DRM events, generate
