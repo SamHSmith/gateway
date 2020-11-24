@@ -1699,6 +1699,7 @@ int main(int argc, char *argv[]) {
 
 
     server.brightness = 1.0;
+    server.passthrough_enabled = false;
 
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
