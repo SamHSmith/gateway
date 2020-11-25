@@ -552,7 +552,7 @@ static bool view_at(struct tinywl_view *view,
 	double view_sx = lx - view->x;
 	double view_sy = ly - view->y;
 
-    if(view->focused_by == NULL)
+    if(view->focused_by == NULL && view->is_fullscreen)
     {
         uint32_t gap = view->server->config->window_gaps; // lazy
         if(view_sx < gap || view_sy < gap || view_sx > view->width - gap || view_sy > view->height - gap)
@@ -760,6 +760,7 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
     wlr_cursor_move(server->cursor, event->device,
             event->delta_x * server->config->mouse_sens, event->delta_y * server->config->mouse_sens);
     struct wlr_surface* surface;
+    if(server->focused_panel->focused_view != NULL) {
     if(server->focused_panel->focused_view->xwayland_surface != NULL)
     {
         surface = server->focused_panel->focused_view->xwayland_surface->surface;
@@ -785,6 +786,7 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
         if(server->cursor->y < server->focused_panel->focused_view->y) { server->cursor->y = server->focused_panel->focused_view->y; }
         else if(server->cursor->y > server->focused_panel->focused_view->y + server->focused_panel->focused_view->height)
         { server->cursor->y = server->focused_panel->focused_view->y + server->focused_panel->focused_view->height; }
+    }
     }
     }
     process_cursor_motion(server, event->time_msec);
