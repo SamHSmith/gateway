@@ -135,13 +135,15 @@ struct gateway_panel {
     int32_t stack_count;
 
     struct tinywl_output* main_output;
+    struct wl_list outputs;
 };
 
 struct tinywl_output {
-	struct wl_list link;
-	struct tinywl_server *server;
-	struct wlr_output *wlr_output;
-	struct wl_listener frame;
+    struct wl_list link;
+    struct wl_list plink; //panel list
+    struct tinywl_server *server;
+    struct wlr_output *wlr_output;
+    struct wl_listener frame;
     struct gateway_panel* panel;
     int32_t* stacks;
     int32_t stack_count;
@@ -254,8 +256,12 @@ static void focus_view(struct tinywl_view *view, struct gateway_panel* panel, bo
 
 static void center_mouse(struct tinywl_server* server)
 {
-    panel_update(server->focused_panel, server->focused_panel->main_output);
+    struct tinywl_output* output;
+    wl_list_for_each(output, &server->focused_panel->outputs, plink) {
+        panel_update(server->focused_panel, output);
+    }
     focus_view(server->focused_panel->focused_view, server->focused_panel, false);
+    wlr_cursor_set_surface(server->cursor, NULL, 0, 0);
 }
 
 static void move_to_front(struct tinywl_view *view)
@@ -1369,6 +1375,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 
     output->panel = server->focused_panel; //TODO add proper panel and output management.
     if(output->panel->main_output == NULL) { output->panel->main_output = output; }
+    wl_list_insert(&output->panel->outputs, &output->plink);
 
     output->stacks = calloc(2, sizeof(int32_t));
     output->stack_count = 2;
@@ -1762,6 +1769,7 @@ int main(int argc, char *argv[]) {
     wl_list_init(&panel->unmapped_views);
     wl_list_init(&panel->views);
     wl_list_init(&panel->redirect_views);
+    wl_list_init(&panel->outputs);
 
     panel->stacks = calloc(4, sizeof(struct gateway_panel));
     panel->stack_count = 4;
