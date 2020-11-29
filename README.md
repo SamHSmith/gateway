@@ -1,47 +1,43 @@
-# TinyWL
+# Gateway
 
-This is the "minimum viable product" Wayland compositor based on wlroots. It
-aims to implement a Wayland compositor in the fewest lines of code possible,
-while still supporting a reasonable set of features. Reading this code is the
-best starting point for anyone looking to build their own Wayland compositor
-based on wlroots.
+Gateway is a dynamic tiling wayland compositor that puts the keyboard in focus. I created gateway because I wanted to try out certain policies for managing windows I hadn't seen before. Mainly I've tried to keep the code simple and fast while also trying out things like not allowing apps to grab focus. My knowlage of X11 are quite limited but I think this is the sort of thing you can't do without wayland. Since X11 apps can sniff all input into the system at all times a lot of them will declare themselves in focus or start reacting to keyboard presses when they shouldn't.
 
-## Building TinyWL
+Gateway is being developed for use in InterstellarOS. Good xwayland support is a goal however certain X'isms like override-redirect makes this harder than it would be otherwise. There is currently basic wlr-layer-shell support so you can have a launcher or background.
 
-TinyWL is disconnected from the main wlroots build system, in order to make it
-easier to understand the build requirements for your own Wayland compositors.
-Simply install the dependencies:
+## Building Gateway
 
+To build gateway you need devel packages of the following on your system:
 - wlroots
 - wayland-protocols
 
-And run `make`.
+to build run:
+git clone https://github.com/SamHSmith/gateway.git
+cd gateway
+git submodule update --init
+make
 
-## Running TinyWL
+## Running Gateway
 
-You can run TinyWL with `./tinywl`. In an existing Wayland or X11 session,
+You can run Gateway with `./gateway`. In an existing Wayland or X11 session,
 tinywl will open a Wayland or X11 window respectively to act as a virtual
 display. You can then open Wayland windows by setting `WAYLAND_DISPLAY` to the
-value shown in the logs. You can also run `./tinywl` from a TTY.
+value shown in the logs. You can also run `./gateway` from a TTY.
 
-In either case, you will likely want to specify `-s [cmd]` to run a command at
-startup, such as a terminal emulator. This will be necessary to start any new
-programs from within the compositor, as TinyWL does not support any custom
-keybindings. TinyWL supports the following keybindings:
+You can specify `-s [cmd]` to run a command at startup, such as a terminal emulator.
 
-- `Alt+Escape`: Terminate the compositor
-- `Alt+F1`: Cycle between windows
+- `Super+Escape`: Terminate the compositor
+
+All the other keybindings are setup very weirdly because I use a customized keyboard layout based on dvorak. I will consolidate them in the future but for now you can view/change them by editing the handle_keybinding function on line 310 in src/gateway.c.
+
+## Startup file
+
+If you create the executable file $HOME/.config/gateway/startup.sh gateway will run it at startup. Useful for starting up swaybg to set the wallpaper.
 
 ## Limitations
 
-Notable omissions from TinyWL:
-
+Todo:
+- tags (also know as "workspaces")
 - HiDPI support
 - Any kind of configuration, e.g. output layout
-- Any protocol other than xdg-shell (e.g. layer-shell, for
-  panels/taskbars/etc; or Xwayland, for proxied X11 windows)
-- Optional protocols, e.g. screen capture, primary selection, virtual
-  keyboard, etc. Most of these are plug-and-play with wlroots, but they're
-  omitted for brevity.
-- Damage tracking, which tracks which parts of the screen are changing and
-  minimizes redraws accordingly.
+- Drag and Drop, used by filemanagers, even internally to one application.
+
