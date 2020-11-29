@@ -11,12 +11,12 @@ To build gateway you need devel packages of the following on your system:
 - wayland-protocols
 
 to build run:
-`
+```
 git clone https://github.com/SamHSmith/gateway.git
 cd gateway
 git submodule update --init
 make
-`
+```
 ## Running Gateway
 
 You can run Gateway with `./gateway`. In an existing Wayland or X11 session,
