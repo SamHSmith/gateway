@@ -29,6 +29,7 @@ You can specify `-s [cmd]` to run a command at startup, such as a terminal emula
 - `Super+Escape`: Terminate the compositor
 
 All the other keybindings are setup very weirdly because I use a customized keyboard layout based on dvorak. I will consolidate them in the future but for now you can view/change them by editing the handle_keybinding function on line 310 in src/gateway.c.
+You alse need to setup your keyboard layout to either "us" or something else since you won't have my "samorak" layout on your system. Keyboard layout aswell as terminal emulator, launcher etc is set on line 1718 in src/gateway.c
 
 ## Startup file
 
