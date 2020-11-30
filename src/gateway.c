@@ -1452,6 +1452,8 @@ static void xdg_surface_unmap(struct wl_listener *listener, void *data) {
                 wl_list_remove(&view->link);
             }
         }
+    } else {
+        wl_list_remove(&view->link);
     }
     wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
 
@@ -1476,20 +1478,24 @@ static void xwayland_surface_unmap(struct wl_listener *listener, void *data) {
             struct tinywl_view *new_view = wl_container_of(view->link.next, new_view, link);
             focus_view(new_view, view->focused_by, false);
             view->focused_by = NULL;
+            wl_list_remove(&view->link);
             center_mouse(view->server);
         } else {
             if(wl_list_length(&view->focused_by->views) > 1) {
                 struct tinywl_view *new_view = wl_container_of(view->link.prev, new_view, link);
                 focus_view(new_view, view->focused_by, false);
                 view->focused_by = NULL;
+                wl_list_remove(&view->link);
                 center_mouse(view->server);
             } else {
                 view->focused_by->focused_view = NULL;
                 view->focused_by = NULL;
+                wl_list_remove(&view->link);
             }
         }
+    } else {
+        wl_list_remove(&view->link);
     }
-    wl_list_remove(&view->link);    
     wl_list_insert(&view->server->focused_panel->unmapped_views, &view->link);
 }
  
