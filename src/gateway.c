@@ -304,31 +304,24 @@ static void list_swap(struct wl_list* a, struct wl_list* b) // swaps order in vi
     a->next = linknext;
     linknext->prev = a;
 }
-static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
-    if(server->passthrough_enabled && sym != XKB_KEY_F12) {
+static bool handle_keybinding(struct tinywl_server *server, uint32_t keycode, uint32_t modifiers) {
+    if(server->passthrough_enabled && keycode != 88) {
         return false;
     }
-    if(sym == XKB_KEY_F12) {
+    if(keycode == 88) {
         server->passthrough_enabled = !server->passthrough_enabled;
         return true;
     }
-	/*
-	 * Here we handle compositor keybindings. This is when the compositor is
-	 * processing keys, rather than passing them on to the client for its own
-	 * processing.
-	 *
-	 * This function assumes Alt is held down.
-	 */
-    char cmd[128];
 
-	switch (sym) {
-	case XKB_KEY_Escape:
-		wl_display_terminate(server->wl_display);
+    if(keycode == 1)
+    {
+        wl_display_terminate(server->wl_display);
         assert(0);
-		break;
-    case XKB_KEY_h:
+    }
+    else if(keycode == 36 && (modifiers & WLR_MODIFIER_SHIFT) == 0)
+    {
         if (wl_list_length(&server->focused_panel->views) < 2) {
-            break;
+            return false;
         }
         struct tinywl_view* current_view = server->focused_panel->focused_view;
         struct wl_list* linknext = current_view->link.prev;
@@ -338,80 +331,100 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 
         focus_view(next_view, server->focused_panel, false);
         center_mouse(server);
-        break;
-	case XKB_KEY_t:
-		if (wl_list_length(&server->focused_panel->views) < 2) {
-			break;
-		}
-        current_view = server->focused_panel->focused_view;
-        linknext = current_view->link.next;
+    }
+    else if(keycode == 37 && (modifiers & WLR_MODIFIER_SHIFT) == 0)
+    {
+        if (wl_list_length(&server->focused_panel->views) < 2) {
+            return false;
+        }
+        struct tinywl_view* current_view = server->focused_panel->focused_view;
+        struct wl_list* linknext = current_view->link.next;
         if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
-		next_view = wl_container_of(
-			linknext, next_view, link);
+        struct tinywl_view* next_view = wl_container_of(
+            linknext, next_view, link);
 
         focus_view(next_view, server->focused_panel, false);
         center_mouse(server);
-		break;
-    case XKB_KEY_n:
+    }
+    else if(keycode == 38)
+    {
         if (wl_list_length(&server->focused_panel->views) < 2) {
-            break;
+            return false;
         }
 
-        next_view = wl_container_of(
+        struct tinywl_view* next_view = wl_container_of(
             server->focused_panel->views.prev, next_view, link);
  
         focus_view(next_view, server->focused_panel, false);
         center_mouse(server);
-        break;
-    case XKB_KEY_H:
-        current_view = server->focused_panel->focused_view;
+    }
+    else if(keycode == 36 && (modifiers & WLR_MODIFIER_SHIFT) != 0)
+    {
+        if (wl_list_length(&server->focused_panel->views) < 2) {
+            return false;
+        }
+        struct tinywl_view* current_view = server->focused_panel->focused_view;
         list_swap(current_view->link.prev, &current_view->link);
         center_mouse(server);
-        break;
-    case XKB_KEY_T:
-        current_view = server->focused_panel->focused_view;
+    }
+    else if(keycode == 37 && (modifiers & WLR_MODIFIER_SHIFT) != 0)
+    {
+        if (wl_list_length(&server->focused_panel->views) < 2) {
+            return false;
+        }
+        struct tinywl_view* current_view = server->focused_panel->focused_view;
         list_swap(&current_view->link, current_view->link.next);
         center_mouse(server);
-        break;
-    case XKB_KEY_M | XKB_KEY_m:
+    }
+    else if(keycode == 49)
+    {
         if(server->focused_panel->focused_view != NULL)
         {
             move_to_front(server->focused_panel->focused_view);
             center_mouse(server);
         }
-        break;
-    case XKB_KEY_F | XKB_KEY_f:
-        server->focused_panel->focused_view->is_fullscreen = !server->focused_panel->focused_view->is_fullscreen;
-        break;
-    case XKB_KEY_Return:
+    }
+    else if(keycode == 21)
+    {
+        server->focused_panel->focused_view->is_fullscreen = 
+                !server->focused_panel->focused_view->is_fullscreen;
+    }
+    else if(keycode == 28)
+    {
+        char cmd[512];
         strcpy(cmd, server->config->terminal);
         strcat(cmd, " &");
         system(cmd);
-        break;
-    case XKB_KEY_d:
+    }
+    else if(keycode == 35)
+    {
+        char cmd[512];
         strcpy(cmd, server->config->launcher);
         strcat(cmd, " &");
         system(cmd);
-        break;
-    case XKB_KEY_Z:
-        if(server->focused_panel->focused_view == NULL) { break; }
+    }
+    else if(keycode == 52 && (modifiers && WLR_MODIFIER_SHIFT) == 1)
+    {
+        if(server->focused_panel->focused_view == NULL) { return false; }
 
-        current_view = server->focused_panel->focused_view;
-        linknext = current_view->link.next;
+        struct tinywl_view* current_view = server->focused_panel->focused_view;
+        struct wl_list* linknext = current_view->link.next;
         if(linknext == &server->focused_panel->views) { linknext = linknext->next; }
-        next_view = wl_container_of(
+        struct tinywl_view* next_view = wl_container_of(
             linknext, next_view, link);
         if(current_view->xdg_surface != NULL){ wlr_xdg_toplevel_send_close(current_view->xdg_surface); }
-        if(current_view->xwayland_surface != NULL){ wlr_xwayland_surface_close(current_view->xwayland_surface);}
+        if(current_view->xwayland_surface != NULL)
+        { wlr_xwayland_surface_close(current_view->xwayland_surface); }
 
         if(next_view == current_view) { server->focused_panel->focused_view = NULL; }
         else { server->focused_panel->focused_view = next_view; }
         center_mouse(server);
-        break;
-	default:
-		return false;
-	}
-	return true;
+    }
+    else
+    {
+        return false;
+    }
+    return true;
 }
 
 static void keyboard_handle_key(
@@ -434,11 +447,7 @@ static void keyboard_handle_key(
 	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->device->keyboard);
 
 	if ((modifiers & WLR_MODIFIER_LOGO) && event->state == WLR_KEY_PRESSED) {
-		/* If alt is held down and this button was _pressed_, we attempt to
-		 * process it as a compositor keybinding. */
-		for (int i = 0; i < nsyms; i++) {
-			handled = handle_keybinding(server, syms[i]);
-		}
+        handled = handle_keybinding(server, event->keycode, modifiers);
 	}
     struct wlr_session* session = wlr_backend_get_session(server->backend); //Virtual terminals
     if(session != NULL && (modifiers & WLR_MODIFIER_CTRL) && (modifiers & WLR_MODIFIER_ALT)){
@@ -1908,7 +1917,7 @@ int main(int argc, char *argv[]) {
     char startup_file_path[128];
     strcpy(startup_file_path, getenv("HOME"));
     strcat(startup_file_path, "/.config/gateway/startup.sh");
-    if( access(startup_file_path, X_OK ) != -1 ) {
+    if( access(startup_file_path, X_OK ) == 0 ) {
         system(startup_file_path);
     }
 
