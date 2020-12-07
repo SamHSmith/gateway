@@ -324,6 +324,7 @@ static bool handle_keybinding(struct tinywl_server *server, xkb_keysym_t sym) {
 	switch (sym) {
 	case XKB_KEY_Escape:
 		wl_display_terminate(server->wl_display);
+        assert(0);
 		break;
     case XKB_KEY_h:
         if (wl_list_length(&server->focused_panel->views) < 2) {
