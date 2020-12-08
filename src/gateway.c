@@ -1913,13 +1913,21 @@ int main(int argc, char *argv[]) {
 		if (fork() == 0) {
 			execl("/bin/sh", "/bin/sh", "-c", startup_cmd, (void *)NULL);
 		}
-	}
-    char startup_file_path[128];
+    }
+
+    char startup_file_path[512];
     strcpy(startup_file_path, getenv("HOME"));
     strcat(startup_file_path, "/.config/gateway/startup.sh");
     if( access(startup_file_path, X_OK ) == 0 ) {
-        system(startup_file_path);
+        char* args[2];
+        args[0] = "startup.sh";
+        args[1] = NULL;
+        if(fork() == 0)
+        {
+            execvp(startup_file_path, args);
+        }
     }
+
 
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
