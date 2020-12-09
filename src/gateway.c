@@ -1138,12 +1138,13 @@ while(!is_done) {
         if(view->xwayland_surface != NULL)
         {
             int32_t w = view->width, h = view->height;
-            if(view->xwayland_surface->size_hints->min_width > w) { w = view->xwayland_surface->size_hints->min_width; }
-            if(view->xwayland_surface->size_hints->min_height > h) { h = view->xwayland_surface->size_hints->min_height; }
-            if(view->xwayland_surface->size_hints->max_width > 0 &&
-        view->xwayland_surface->size_hints->max_width < w) { w = view->xwayland_surface->size_hints->max_width; }
-            if(view->xwayland_surface->size_hints->max_height > 0 &&
-        view->xwayland_surface->size_hints->max_height < h) { h = view->xwayland_surface->size_hints->max_height; }
+            struct wlr_xwayland_surface_size_hints size_hints = {0};
+            if(view->xwayland_surface->size_hints != NULL)
+            { size_hints = *view->xwayland_surface->size_hints; }
+            if(size_hints.min_width > w) { w = size_hints.min_width; }
+            if(size_hints.min_height > h) { h = size_hints.min_height; }
+            if(size_hints.max_width > 0 && size_hints.max_width < w) { w = size_hints.max_width; }
+            if(size_hints.max_height > 0 && size_hints.max_height < h) { h = size_hints.max_height; }
 
             wlr_xwayland_surface_configure(view->xwayland_surface, 0, 0,
                 w, h);
