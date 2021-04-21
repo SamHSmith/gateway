@@ -446,7 +446,7 @@ static void keyboard_handle_key(
 	bool handled = false;
 	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->device->keyboard);
 
-	if ((modifiers & WLR_MODIFIER_LOGO) && event->state == WLR_KEY_PRESSED) {
+	if ((modifiers & WLR_MODIFIER_LOGO) && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         handled = handle_keybinding(server, event->keycode, modifiers);
 	}
     struct wlr_session* session = wlr_backend_get_session(server->backend); //Virtual terminals
@@ -460,7 +460,7 @@ static void keyboard_handle_key(
         }
     }
 
-    if(event->state != WLR_KEY_RELEASED) {
+    if(event->state != WL_KEYBOARD_KEY_STATE_RELEASED) {
     for(int i = 0; i < nsyms; i++) {
         if(syms[i] == XKB_KEY_XF86MonBrightnessUp) {
             server->brightness += 0.05;
@@ -1756,7 +1756,7 @@ int main(int argc, char *argv[]) {
 	 * backend uses the renderer, for example, to fall back to software cursors
 	 * if the backend does not support hardware cursors (some older GPUs
 	 * don't). */
-	server.backend = wlr_backend_autocreate(server.wl_display, NULL);
+	server.backend = wlr_backend_autocreate(server.wl_display);
 
 	/* If we don't provide a renderer, autocreate makes a GLES2 renderer for us.
 	 * The renderer is responsible for defining the various pixel formats it
