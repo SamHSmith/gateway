@@ -1735,11 +1735,11 @@ int main(int argc, char *argv[]) {
     struct tinywl_server server; // GATEWAY CONFIGURATION
     server.config = calloc(1, sizeof(struct gateway_config));
     server.config->terminal = "foot";
-    server.config->launcher = "wofi --show drun -Ii";
+    server.config->launcher = "fuzzel -b1f301fff -tffffffff -l20";
     server.config->mouse_sens = 0.5;
     server.config->kbd_layout = "samorak";
     server.config->kbd_variant = NULL;
-    server.config->window_gaps = 10;
+    server.config->window_gaps = 8;
 
 
     server.brightness = 1.0;
