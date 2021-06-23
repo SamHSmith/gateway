@@ -1367,6 +1367,13 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	 * would let the user configure it. */
 	if (!wl_list_empty(&wlr_output->modes)) {
 		struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
+        struct wlr_output_mode *m;
+        int32_t highest_refresh = mode->refresh;
+        wl_list_for_each(m, &wlr_output->modes, link) {
+            if(m->refresh > highest_refresh)
+            { mode = m; }
+        }
+        wlr_log(WLR_ERROR, "Using mode %dx%d@%d mHz\n", mode->width, mode->height, mode->refresh);
 		wlr_output_set_mode(wlr_output, mode);
 		wlr_output_enable(wlr_output, true);
 		if (!wlr_output_commit(wlr_output)) {
