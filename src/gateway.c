@@ -1744,8 +1744,8 @@ int main(int argc, char *argv[]) {
     server.config->terminal = "foot";
     server.config->launcher = "fuzzel -b1f301fff -tffffffff -l20";
     server.config->mouse_sens = 0.5;
-    server.config->kbd_layout = "samorak";
-    server.config->kbd_variant = NULL;
+    server.config->kbd_layout = "us";
+    server.config->kbd_variant = "dvorak";
     server.config->window_gaps = 8;
 
 
