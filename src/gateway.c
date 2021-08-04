@@ -403,7 +403,7 @@ static bool handle_keybinding(struct tinywl_server *server, uint32_t keycode, ui
         strcat(cmd, " &");
         system(cmd);
     }
-    else if(keycode == 52 && (modifiers && WLR_MODIFIER_SHIFT) == 1)
+    else if(keycode == 53 && (modifiers && WLR_MODIFIER_SHIFT) == 1)
     {
         if(server->focused_panel->focused_view == NULL) { return false; }
 
